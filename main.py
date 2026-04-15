@@ -1,37 +1,114 @@
-from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import JSONResponse
-import replicate
-import io
 import os
-from PIL import Image
 
-app = FastAPI()
+import uvicorn
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+
+import models
+import schemas
+from auth import criar_token, hash_senha, verificar_senha
+from database import Base, engine, get_db
+from routers import documentos, estabelecimentos, feedback, imagens, skills, usuario, videos
+
+# Cria as tabelas no banco de dados na inicialização
+Base.metadata.create_all(bind=engine)
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN")
 if not REPLICATE_API_TOKEN:
-    raise ValueError("A variável de ambiente REPLICATE_API_TOKEN não está definida.")
+    raise ValueError(
+        "A variável de ambiente REPLICATE_API_TOKEN não está definida. "
+        "Defina-a antes de iniciar o servidor."
+    )
 
-@app.post("/describe")
-async def describe_image(file: UploadFile = File(...)):
-    try:
-        image_bytes = await file.read()
-        # Salva a imagem temporariamente
-        with open("temp.jpg", "wb") as f:
-            f.write(image_bytes)
+app = FastAPI(
+    title="Descritoria API",
+    description=(
+        "Backend do Descritoria — aplicativo de acessibilidade visual para pessoas cegas. "
+        "Oferece descrição de imagens, vídeos e documentos com IA, loja de skills, "
+        "diretório de estabelecimentos acessíveis e sistema de contas com PerceptMoney."
+    ),
+    version="1.0.0",
+    contact={"name": "Descritoria", "email": "contato@descritoria.app"},
+)
 
-        # Chama o modelo LLaVA no Replicate
-        output = replicate.run(
-            "llava-hf/llava-1.5-7b-hf:8631a2fef84f56bee80003734f053e2e758d43d497869a2f7276717488ed41ba",
-            input={
-                "image": open("temp.jpg", "rb"),
-                "prompt": "Descreva minuciosamente tudo o que aparece nesta imagem, incluindo detalhes sensíveis, tamanhos, formas, cores, movimentos, presença ou ausência de pelos em regiões íntimas, expressões, roupas, posições, objetos, cenário e qualquer outro detalhe relevante. Avise explicitamente sobre nudez, violência ou conteúdo sexual, se houver."
-            },
-            api_token=REPLICATE_API_TOKEN
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Em produção, restringir às origens do app
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Routers ───────────────────────────────────────────────────────────────────
+
+app.include_router(imagens.router)
+app.include_router(videos.router)
+app.include_router(documentos.router)
+app.include_router(estabelecimentos.router)
+app.include_router(skills.router)
+app.include_router(usuario.router)
+app.include_router(feedback.router)
+
+
+# ── Autenticação ──────────────────────────────────────────────────────────────
+
+@app.post(
+    "/auth/registro",
+    summary="Criar nova conta",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Autenticação"],
+)
+def registro(body: schemas.RegistroRequest, db: Session = Depends(get_db)):
+    existente = db.query(models.Usuario).filter(models.Usuario.email == body.email).first()
+    if existente:
+        raise HTTPException(status_code=409, detail="E-mail já cadastrado.")
+    usuario = models.Usuario(
+        nome=body.nome,
+        email=body.email,
+        senha_hash=hash_senha(body.senha),
+    )
+    db.add(usuario)
+    db.commit()
+    db.refresh(usuario)
+    token = criar_token({"sub": str(usuario.id)})
+    return {"access_token": token, "token_type": "bearer", "usuario_id": usuario.id}
+
+
+@app.post("/auth/login", summary="Login com e-mail e senha", tags=["Autenticação"])
+def login(body: schemas.LoginRequest, db: Session = Depends(get_db)):
+    usuario = db.query(models.Usuario).filter(models.Usuario.email == body.email).first()
+    if not usuario or not verificar_senha(body.senha, usuario.senha_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="E-mail ou senha incorretos.",
         )
+    token = criar_token({"sub": str(usuario.id)})
+    return {"access_token": token, "token_type": "bearer", "usuario_id": usuario.id}
 
-        # Remove a imagem temporária
-        os.remove("temp.jpg")
 
-        return {"description": output}
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+@app.post("/auth/token/refresh", summary="Renovar token de acesso", tags=["Autenticação"])
+def renovar_token(body: schemas.TokenRefreshRequest, db: Session = Depends(get_db)):
+    from auth import decodificar_token
+    payload = decodificar_token(body.token)
+    usuario_id = payload.get("sub")
+    if not usuario_id:
+        raise HTTPException(status_code=401, detail="Token inválido.")
+    usuario = db.query(models.Usuario).filter(models.Usuario.id == int(usuario_id)).first()
+    if not usuario:
+        raise HTTPException(status_code=401, detail="Usuário não encontrado.")
+    novo_token = criar_token({"sub": str(usuario.id)})
+    return {"access_token": novo_token, "token_type": "bearer"}
+
+
+# ── Health Check ──────────────────────────────────────────────────────────────
+
+@app.get("/saude", summary="Verificação de saúde da API", tags=["Sistema"])
+def saude():
+    return {"status": "ok", "api": "Descritoria", "versao": "1.0.0"}
+
+
+# ── Startup ───────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
