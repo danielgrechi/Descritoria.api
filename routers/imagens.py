@@ -18,6 +18,7 @@ router = APIRouter(prefix="/imagens", tags=["Imagens"])
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
 MODELO_IMAGEM = "yorickvp/llava-13b:80537f9eead1a0bf472503ec4ea45a3799ae5dfd9fac53e39967d1dc6366f8fe"
+MODELO_TEXTO = "meta/llama-3.1-8b-instruct"
 
 TIPOS_IMAGEM_PERMITIDOS = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"}
 FORMATO_PARA_MIME = {
@@ -146,7 +147,7 @@ async def perguntar_sobre_descricao(
     try:
         client = replicate.Client(api_token=REPLICATE_API_TOKEN)
         saida = client.run(
-            MODELO_IMAGEM,
+            MODELO_TEXTO,
             input={"prompt": prompt, "max_tokens": 512, "temperature": 0.3},
         )
         resposta = "".join(saida).strip()
@@ -155,7 +156,7 @@ async def perguntar_sobre_descricao(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
-    return {"resposta": resposta, "modelo": MODELO_IMAGEM}
+    return {"resposta": resposta, "modelo": MODELO_TEXTO}
 
 
 @router.post("/perguntar-nova", summary="Anexar nova imagem e fazer pergunta")
