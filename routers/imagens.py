@@ -17,7 +17,7 @@ from database import get_db
 router = APIRouter(prefix="/imagens", tags=["Imagens"])
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
-MODELO_IMAGEM = "yorickvp/llava-13b"
+MODELO_IMAGEM = "yorickvp/llava-13b:80537f9eead1a0bf472503ec4ea45a3799ae5dfd9fac53e39967d1dc6366f8fe"
 
 TIPOS_IMAGEM_PERMITIDOS = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"}
 FORMATO_PARA_MIME = {
@@ -72,7 +72,7 @@ def chamar_modelo(data_uri: str, prompt: str) -> str:
     client = replicate.Client(api_token=REPLICATE_API_TOKEN)
     saida = client.run(
         MODELO_IMAGEM,
-        input={"image": data_uri, "prompt": prompt, "max_tokens": 1024, "temperature": 0.2},
+        input={"image": data_uri, "prompt": prompt, "max_new_tokens": 1024, "temperature": 0.2},
     )
     return "".join(saida).strip()
 
