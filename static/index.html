@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Descritoria</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0a0a0a;
+      color: #f0f0f0;
+      padding: 20px;
+      font-size: 18px;
+      line-height: 1.6;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 32px; font-weight: 700; text-align: center; margin-bottom: 4px; color: #fff; }
+    .subtitulo { text-align: center; color: #888; margin-bottom: 24px; font-size: 15px; }
+    section { background: #1a1a1a; border-radius: 16px; padding: 20px; margin-bottom: 20px; }
+    h2 { font-size: 20px; margin-bottom: 14px; color: #e0e0e0; }
+    button {
+      display: block; width: 100%; padding: 18px 16px;
+      font-size: 18px; font-weight: 600; border: none; border-radius: 12px;
+      cursor: pointer; margin-bottom: 10px; text-align: center;
+    }
+    .btn-azul { background: #007AFF; color: #fff; }
+    .btn-verde { background: #30D158; color: #fff; }
+    .btn-laranja { background: #FF9F0A; color: #fff; }
+    .btn-roxo { background: #BF5AF2; color: #fff; }
+    .btn-vermelho { background: #FF453A; color: #fff; }
+    .btn-cinza { background: #3a3a3c; color: #fff; }
+    button:active { opacity: 0.8; }
+    input[type="file"] { display: none; }
+    input[type="text"], textarea {
+      width: 100%; padding: 14px; font-size: 16px;
+      background: #2c2c2e; color: #fff; border: 1px solid #3a3a3c;
+      border-radius: 10px; margin-bottom: 10px;
+    }
+    .resultado {
+      background: #2c2c2e; border-radius: 12px; padding: 16px;
+      margin-top: 12px; font-size: 17px; line-height: 1.7;
+      min-height: 60px; color: #f0f0f0;
+    }
+    .status { color: #888; font-size: 15px; font-style: italic; margin-top: 8px; min-height: 22px; }
+    .nav { display: flex; gap: 8px; margin-bottom: 20px; overflow-x: auto; }
+    .nav button {
+      flex: 0 0 auto; width: auto; padding: 10px 16px;
+      font-size: 15px; border-radius: 20px; margin: 0;
+    }
+    .nav button.ativo { background: #007AFF; color: #fff; }
+    .nav button:not(.ativo) { background: #2c2c2e; color: #aaa; }
+    .aba { display: none; }
+    .aba.ativa { display: block; }
+    .linha { display: flex; gap: 10px; }
+    .linha button { flex: 1; }
+    .destaque {
+      background: #1c3a5e; border-radius: 10px; padding: 12px;
+      margin-bottom: 10px; font-size: 15px; color: #90c8ff;
+    }
+    .erro { color: #FF453A; }
+    .ok { color: #30D158; }
+    #statusGlobal {
+      text-align: center; font-size: 14px; color: #888;
+      margin-bottom: 16px; min-height: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Descritoria</h1>
+<p class="subtitulo">Acessibilidade visual com inteligência artificial</p>
+<div id="statusGlobal" aria-live="polite">Conectando...</div>
+
+<!-- Navegação por abas -->
+<nav class="nav" role="tablist" aria-label="Seções do aplicativo">
+  <button class="ativo" onclick="trocarAba('imagens', this)" role="tab" aria-selected="true">📷 Imagens</button>
+  <button onclick="trocarAba('perguntar', this)" role="tab">❓ Perguntar</button>
+  <button onclick="trocarAba('documentos', this)" role="tab">📄 Documentos</button>
+  <button onclick="trocarAba('estabelecimentos', this)" role="tab">🏪 Locais</button>
+  <button onclick="trocarAba('conta', this)" role="tab">👤 Conta</button>
+</nav>
+
+<!-- ABA: IMAGENS -->
+<div id="aba-imagens" class="aba ativa" role="tabpanel">
+  <section aria-label="Descrever imagem">
+    <h2>📷 Descrever Imagem</h2>
+    <p style="color:#888;margin-bottom:14px;font-size:15px">Escolha uma foto da galeria ou tire uma foto com a câmera. A IA vai descrever tudo em português.</p>
+
+    <input type="file" id="arquivoImagem" accept="image/*" onchange="previewImagem()" />
+
+    <div class="linha">
+      <button class="btn-azul" onclick="document.getElementById('arquivoImagem').click()" aria-label="Escolher foto da galeria">
+        🖼 Galeria
+      </button>
+      <button class="btn-verde" onclick="abrirCamera()" aria-label="Tirar foto com câmera">
+        📷 Câmera
+      </button>
+    </div>
+
+    <input type="file" id="arquivoCamera" accept="image/*" capture="environment" onchange="usarFotoCamera()" />
+
+    <div id="previewArea" style="display:none;margin-bottom:10px;">
+      <img id="previewImg" src="" alt="Foto selecionada" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover;" />
+    </div>
+
+    <div class="linha">
+      <button class="btn-azul" onclick="descreverImagem(1)" aria-label="Gerar 1 descrição">1 Descrição</button>
+      <button class="btn-cinza" onclick="descreverImagem(3)" aria-label="Gerar 3 descrições diferentes">3 Versões</button>
+    </div>
+
+    <div class="status" id="statusImagem" aria-live="polite"></div>
+
+    <div id="resultadoImagem" class="resultado" aria-live="polite" style="display:none"></div>
+
+    <div id="botoesPosFoto" style="display:none;">
+      <button class="btn-laranja" onclick="lerEmVoz('imagem')" aria-label="Ler descrição em voz alta">🔊 Ouvir Descrição</button>
+      <button class="btn-cinza" onclick="pararVoz()" aria-label="Parar leitura">⏹ Parar</button>
+    </div>
+  </section>
+</div>
+
+<!-- ABA: PERGUNTAR -->
+<div id="aba-perguntar" class="aba" role="tabpanel">
+  <section aria-label="Fazer pergunta sobre imagem">
+    <h2>❓ Perguntar sobre Imagem</h2>
+    <div class="destaque">Primeiro descreva uma imagem na aba "Imagens", depois volte aqui para fazer perguntas sobre ela.</div>
+
+    <label for="perguntaTexto" style="display:block;margin-bottom:8px;color:#aaa;">Sua pergunta:</label>
+    <textarea id="perguntaTexto" rows="3" placeholder="Ex: Que cor é a camisa da pessoa? Tem texto na imagem? Qual é o ambiente?" aria-label="Digite sua pergunta sobre a imagem"></textarea>
+
+    <button class="btn-azul" onclick="perguntarSobreImagem()" aria-label="Enviar pergunta">❓ Perguntar</button>
+
+    <div class="status" id="statusPergunta" aria-live="polite"></div>
+    <div id="resultadoPergunta" class="resultado" aria-live="polite" style="display:none"></div>
+    <button id="btnOuvirResposta" class="btn-laranja" onclick="lerEmVoz('pergunta')" style="display:none" aria-label="Ouvir resposta em voz alta">🔊 Ouvir Resposta</button>
+  </section>
+</div>
+
+<!-- ABA: DOCUMENTOS -->
+<div id="aba-documentos" class="aba" role="tabpanel">
+  <section aria-label="Ler documento">
+    <h2>📄 Ler Documento</h2>
+    <p style="color:#888;margin-bottom:14px;font-size:15px">Tire foto de um documento, carta, cardápio, rótulo ou qualquer texto. A IA vai extrair e ler o conteúdo.</p>
+
+    <input type="file" id="arquivoDocumento" accept="image/*" capture="environment" onchange="previewDocumento()" />
+
+    <div class="linha">
+      <button class="btn-azul" onclick="document.getElementById('arquivoDocumento').click()" aria-label="Escolher ou fotografar documento">
+        📄 Escolher Documento
+      </button>
+    </div>
+
+    <div id="previewDocArea" style="display:none;margin-bottom:10px;">
+      <img id="previewDocImg" src="" alt="Documento selecionado" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover;" />
+    </div>
+
+    <button class="btn-verde" onclick="lerDocumento()" aria-label="Extrair e ler texto do documento">📖 Ler Documento</button>
+
+    <div class="status" id="statusDocumento" aria-live="polite"></div>
+    <div id="resultadoDocumento" class="resultado" aria-live="polite" style="display:none"></div>
+    <button id="btnOuvirDocumento" class="btn-laranja" onclick="lerEmVoz('documento')" style="display:none" aria-label="Ouvir conteúdo do documento">🔊 Ouvir Documento</button>
+  </section>
+</div>
+
+<!-- ABA: ESTABELECIMENTOS -->
+<div id="aba-estabelecimentos" class="aba" role="tabpanel">
+  <section aria-label="Locais acessíveis">
+    <h2>🏪 Locais Acessíveis para PcD</h2>
+    <p style="color:#888;margin-bottom:14px;font-size:15px">Encontre estabelecimentos que acolhem pessoas com deficiência.</p>
+
+    <input type="text" id="buscaLocal" placeholder="Buscar por nome ou categoria..." aria-label="Buscar estabelecimento" />
+    <button class="btn-azul" onclick="buscarEstabelecimentos()" aria-label="Buscar locais">🔍 Buscar</button>
+
+    <div class="status" id="statusLocais" aria-live="polite"></div>
+    <div id="resultadoLocais" aria-live="polite"></div>
+
+    <hr style="border-color:#3a3a3c;margin:20px 0;" />
+
+    <h2 style="font-size:17px;">Cadastrar Novo Local</h2>
+    <input type="text" id="nomeLocal" placeholder="Nome do estabelecimento" aria-label="Nome do local" />
+    <input type="text" id="categoriaLocal" placeholder="Categoria (ex: Restaurante, Banco, Hospital)" aria-label="Categoria" />
+    <input type="text" id="enderecoLocal" placeholder="Endereço completo" aria-label="Endereço" />
+    <textarea id="descricaoLocal" rows="2" placeholder="Descreva as facilidades de acessibilidade..." aria-label="Descrição das facilidades"></textarea>
+    <button class="btn-verde" onclick="cadastrarLocal()" aria-label="Cadastrar este local">✅ Cadastrar Local</button>
+    <div class="status" id="statusCadastroLocal" aria-live="polite"></div>
+  </section>
+</div>
+
+<!-- ABA: CONTA -->
+<div id="aba-conta" class="aba" role="tabpanel">
+  <section aria-label="Sua conta">
+    <h2>👤 Minha Conta</h2>
+
+    <div id="infoConta" class="resultado" aria-live="polite">Carregando...</div>
+
+    <button class="btn-azul" onclick="carregarPerfil()" style="margin-top:10px" aria-label="Atualizar informações da conta">🔄 Atualizar</button>
+
+    <hr style="border-color:#3a3a3c;margin:20px 0;" />
+
+    <h2 style="font-size:17px;">Saldo PerceptMoney</h2>
+    <div id="infoSaldo" class="resultado" aria-live="polite">—</div>
+    <button class="btn-verde" onclick="carregarSaldo()" style="margin-top:10px" aria-label="Ver saldo">💰 Ver Saldo</button>
+
+    <hr style="border-color:#3a3a3c;margin:20px 0;" />
+
+    <h2 style="font-size:17px;">Sair da Conta</h2>
+    <button class="btn-vermelho" onclick="sair()" aria-label="Sair e desconectar">🚪 Sair</button>
+  </section>
+</div>
+
+<script>
+  const API = '';
+  let token = localStorage.getItem('descritoria_token');
+  let ultimaDescricaoId = null;
+  let ultimoTextoImagem = '';
+  let ultimoTextoPergunta = '';
+  let ultimoTextoDocumento = '';
+
+  // ── Inicialização ─────────────────────────────────────────────────────────
+
+  async function inicializar() {
+    setStatus('Verificando conexão...');
+    if (!token) {
+      await registrarOuLogin();
+    } else {
+      try {
+        const r = await fetch(`${API}/usuario/perfil`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!r.ok) {
+          localStorage.removeItem('descritoria_token');
+          token = null;
+          await registrarOuLogin();
+        } else {
+          setStatus('Conectado ✓', 'ok');
+        }
+      } catch {
+        setStatus('Erro de conexão com o servidor', 'erro');
+      }
+    }
+  }
+
+  async function registrarOuLogin() {
+    setStatus('Criando sessão...');
+    const email = 'usuario@descritoria.app';
+    const senha = 'Descritoria@2025';
+
+    try {
+      const r = await fetch(`${API}/auth/registro`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: 'Usuário Descritoria', email, senha })
+      });
+      const d = await r.json();
+      if (d.access_token) { salvarToken(d.access_token); return; }
+    } catch {}
+
+    try {
+      const r = await fetch(`${API}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, senha })
+      });
+      const d = await r.json();
+      if (d.access_token) { salvarToken(d.access_token); return; }
+      setStatus('Erro ao conectar: ' + (d.detail || 'verifique o servidor'), 'erro');
+    } catch (e) {
+      setStatus('Servidor não encontrado. Verifique se está rodando.', 'erro');
+    }
+  }
+
+  function salvarToken(t) {
+    token = t;
+    localStorage.setItem('descritoria_token', t);
+    setStatus('Conectado ✓', 'ok');
+  }
+
+  function setStatus(msg, tipo) {
+    const el = document.getElementById('statusGlobal');
+    el.textContent = msg;
+    el.className = tipo === 'erro' ? 'erro' : tipo === 'ok' ? 'ok' : '';
+  }
+
+  // ── Navegação ─────────────────────────────────────────────────────────────
+
+  function trocarAba(nome, btn) {
+    document.querySelectorAll('.aba').forEach(a => a.classList.remove('ativa'));
+    document.querySelectorAll('.nav button').forEach(b => { b.classList.remove('ativo'); b.setAttribute('aria-selected', 'false'); });
+    document.getElementById('aba-' + nome).classList.add('ativa');
+    btn.classList.add('ativo');
+    btn.setAttribute('aria-selected', 'true');
+
+    if (nome === 'conta') carregarPerfil();
+    if (nome === 'estabelecimentos') buscarEstabelecimentos();
+  }
+
+  // ── Imagens ───────────────────────────────────────────────────────────────
+
+  function abrirCamera() {
+    document.getElementById('arquivoCamera').click();
+  }
+
+  function usarFotoCamera() {
+    const file = document.getElementById('arquivoCamera').files[0];
+    if (!file) return;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('arquivoImagem').files = dt.files;
+    previewImagem();
+  }
+
+  function previewImagem() {
+    const file = document.getElementById('arquivoImagem').files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    document.getElementById('previewImg').src = url;
+    document.getElementById('previewArea').style.display = 'block';
+  }
+
+  async function descreverImagem(qtd = 1) {
+    const input = document.getElementById('arquivoImagem');
+    if (!input.files[0]) { alert('Escolha uma foto primeiro.'); return; }
+
+    const st = document.getElementById('statusImagem');
+    const res = document.getElementById('resultadoImagem');
+    const botoes = document.getElementById('botoesPosFoto');
+
+    st.textContent = 'Analisando imagem com IA... Pode demorar alguns segundos.';
+    res.style.display = 'none';
+    botoes.style.display = 'none';
+
+    if (!token) await registrarOuLogin();
+
+    const form = new FormData();
+    form.append('arquivo', input.files[0]);
+    form.append('quantidade', String(qtd));
+
+    try {
+      const r = await fetch(`${API}/imagens/descrever`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form
+      });
+      const d = await r.json();
+
+      if (r.ok && d.descricoes && d.descricoes.length > 0) {
+        ultimaDescricaoId = d.descricoes[0].id;
+        const textos = d.descricoes.map((desc, i) =>
+          qtd > 1 ? `Versão ${i + 1}:\n${desc.descricao}` : desc.descricao
+        ).join('\n\n---\n\n');
+
+        ultimoTextoImagem = textos;
+        res.textContent = textos;
+        res.style.display = 'block';
+        botoes.style.display = 'block';
+        st.textContent = '';
+        lerEmVoz('imagem');
+      } else {
+        st.innerHTML = `<span class="erro">Erro: ${d.detail || JSON.stringify(d)}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro de conexão: ${e.message}</span>`;
+    }
+  }
+
+  async function perguntarSobreImagem() {
+    const pergunta = document.getElementById('perguntaTexto').value.trim();
+    if (!pergunta) { alert('Digite uma pergunta.'); return; }
+    if (!ultimaDescricaoId) { alert('Primeiro descreva uma imagem na aba Imagens.'); return; }
+
+    const st = document.getElementById('statusPergunta');
+    const res = document.getElementById('resultadoPergunta');
+    st.textContent = 'Buscando resposta...';
+    res.style.display = 'none';
+
+    if (!token) await registrarOuLogin();
+
+    try {
+      const r = await fetch(`${API}/imagens/perguntar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descricao_id: ultimaDescricaoId, pergunta })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        ultimoTextoPergunta = d.resposta;
+        res.textContent = d.resposta;
+        res.style.display = 'block';
+        document.getElementById('btnOuvirResposta').style.display = 'block';
+        st.textContent = '';
+        lerEmVoz('pergunta');
+      } else {
+        st.innerHTML = `<span class="erro">Erro: ${d.detail}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
+  }
+
+  // ── Documentos ────────────────────────────────────────────────────────────
+
+  function previewDocumento() {
+    const file = document.getElementById('arquivoDocumento').files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    document.getElementById('previewDocImg').src = url;
+    document.getElementById('previewDocArea').style.display = 'block';
+  }
+
+  async function lerDocumento() {
+    const input = document.getElementById('arquivoDocumento');
+    if (!input.files[0]) { alert('Escolha ou fotografe um documento primeiro.'); return; }
+
+    const st = document.getElementById('statusDocumento');
+    const res = document.getElementById('resultadoDocumento');
+    st.textContent = 'Lendo documento... Aguarde.';
+    res.style.display = 'none';
+
+    if (!token) await registrarOuLogin();
+
+    const form = new FormData();
+    form.append('arquivo', input.files[0]);
+
+    try {
+      const r = await fetch(`${API}/documentos/ler`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form
+      });
+      const d = await r.json();
+      if (r.ok) {
+        ultimoTextoDocumento = d.texto || d.conteudo || JSON.stringify(d);
+        res.textContent = ultimoTextoDocumento;
+        res.style.display = 'block';
+        document.getElementById('btnOuvirDocumento').style.display = 'block';
+        st.textContent = '';
+        lerEmVoz('documento');
+      } else {
+        st.innerHTML = `<span class="erro">Erro: ${d.detail}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
+  }
+
+  // ── Estabelecimentos ──────────────────────────────────────────────────────
+
+  async function buscarEstabelecimentos() {
+    const busca = document.getElementById('buscaLocal').value.trim();
+    const st = document.getElementById('statusLocais');
+    const res = document.getElementById('resultadoLocais');
+    st.textContent = 'Buscando...';
+    res.innerHTML = '';
+
+    try {
+      const params = busca ? `?busca=${encodeURIComponent(busca)}` : '';
+      const r = await fetch(`${API}/estabelecimentos${params}`);
+      const d = await r.json();
+      if (r.ok) {
+        if (!d.length) {
+          res.innerHTML = '<p style="color:#888">Nenhum estabelecimento encontrado.</p>';
+          st.textContent = '';
+          return;
+        }
+        res.innerHTML = d.map(e => `
+          <div class="resultado" style="margin-bottom:10px">
+            <strong>${e.nome}</strong><br>
+            <small style="color:#888">${e.categoria || ''}</small><br>
+            ${e.endereco || ''}<br>
+            ${e.descricao ? `<span style="color:#aaa;font-size:15px">${e.descricao}</span>` : ''}
+            ${e.verificado ? '<span style="color:#30D158"> ✓ Verificado</span>' : ''}
+          </div>`).join('');
+        st.textContent = `${d.length} local(is) encontrado(s)`;
+      } else {
+        st.innerHTML = `<span class="erro">${d.detail}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
+  }
+
+  async function cadastrarLocal() {
+    const nome = document.getElementById('nomeLocal').value.trim();
+    const categoria = document.getElementById('categoriaLocal').value.trim();
+    const endereco = document.getElementById('enderecoLocal').value.trim();
+    const descricao = document.getElementById('descricaoLocal').value.trim();
+
+    if (!nome || !categoria || !endereco) { alert('Preencha nome, categoria e endereço.'); return; }
+    if (!token) await registrarOuLogin();
+
+    const st = document.getElementById('statusCadastroLocal');
+    st.textContent = 'Cadastrando...';
+
+    try {
+      const r = await fetch(`${API}/estabelecimentos`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome, categoria, endereco, descricao })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        st.innerHTML = '<span class="ok">✓ Local cadastrado com sucesso!</span>';
+        ['nomeLocal','categoriaLocal','enderecoLocal','descricaoLocal'].forEach(id => document.getElementById(id).value = '');
+        buscarEstabelecimentos();
+      } else {
+        st.innerHTML = `<span class="erro">Erro: ${d.detail}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
+  }
+
+  // ── Conta ─────────────────────────────────────────────────────────────────
+
+  async function carregarPerfil() {
+    if (!token) { document.getElementById('infoConta').textContent = 'Não conectado.'; return; }
+    try {
+      const r = await fetch(`${API}/usuario/perfil`, { headers: { Authorization: `Bearer ${token}` } });
+      const d = await r.json();
+      if (r.ok) {
+        document.getElementById('infoConta').innerHTML =
+          `<strong>Nome:</strong> ${d.nome}<br><strong>E-mail:</strong> ${d.email}<br><strong>Desde:</strong> ${new Date(d.criado_em).toLocaleDateString('pt-BR')}`;
+      } else {
+        document.getElementById('infoConta').innerHTML = `<span class="erro">${d.detail}</span>`;
+      }
+    } catch (e) {
+      document.getElementById('infoConta').innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
+  }
+
+  async function carregarSaldo() {
+    if (!token) return;
+    try {
+      const r = await fetch(`${API}/usuario/saldo`, { headers: { Authorization: `Bearer ${token}` } });
+      const d = await r.json();
+      if (r.ok) {
+        document.getElementById('infoSaldo').textContent = `PM$ ${d.saldo || d.saldo_perceptmoney || 0}`;
+      }
+    } catch {}
+  }
+
+  function sair() {
+    if (!confirm('Deseja sair da conta?')) return;
+    localStorage.removeItem('descritoria_token');
+    token = null;
+    setStatus('Sessão encerrada. Recarregue a página.', 'erro');
+  }
+
+  // ── Voz ───────────────────────────────────────────────────────────────────
+
+  function lerEmVoz(origem) {
+    let texto = '';
+    if (origem === 'imagem') texto = ultimoTextoImagem;
+    else if (origem === 'pergunta') texto = ultimoTextoPergunta;
+    else if (origem === 'documento') texto = ultimoTextoDocumento;
+    else texto = origem;
+
+    if (!texto) return;
+    pararVoz();
+    const utt = new SpeechSynthesisUtterance(texto);
+    utt.lang = 'pt-BR';
+    utt.rate = 0.95;
+    speechSynthesis.speak(utt);
+  }
+
+  function pararVoz() {
+    speechSynthesis.cancel();
+  }
+
+  // ── Start ─────────────────────────────────────────────────────────────────
+  inicializar();
+</script>
+</body>
+</html>
