@@ -403,20 +403,14 @@ async def descrever_imagens_pagina(
             if url_completa not in urls_imagens:
                 urls_imagens.append(url_completa)
 
-    # filtra URLs que parecem imagens reais (evita ícones e rastreadores)
-    extensoes_imagem = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif")
+    # Descarta apenas ruído óbvio (rastreadores, ícones minúsculos) — não exige extensão
+    EXCLUIR_NOMES = ["favicon", "pixel", "track", "1x1", "blank", "spacer", "ad.gif", "ads."]
     urls_filtradas = []
     for u in urls_imagens:
         caminho = urlparse(u).path.lower()
-        # inclui se tem extensão de imagem ou se veio do og/twitter
-        if any(caminho.endswith(ext) for ext in extensoes_imagem) or u in [
-            (og["content"] if og and og.get("content") else ""),
-            (tw["content"] if tw and tw.get("content") else ""),
-        ]:
-            # descarta ícones e imagens muito pequenas pelo nome
-            nome = caminho.split("/")[-1]
-            if not any(k in nome for k in ["icon", "logo", "favicon", "pixel", "track", "1x1"]):
-                urls_filtradas.append(u)
+        nome = caminho.split("/")[-1]
+        if not any(k in nome for k in EXCLUIR_NOMES) and not any(k in u for k in EXCLUIR_NOMES):
+            urls_filtradas.append(u)
 
     if not urls_filtradas:
         raise HTTPException(
@@ -426,11 +420,13 @@ async def descrever_imagens_pagina(
 
     urls_filtradas = urls_filtradas[: body.limite]
     contexto_pessoas = _contexto_pessoas(usuario.id, db)
-    prompt_final = PROMPT_DESCRICAO + contexto_pessoas
+    estilo = _estilo_usuario(usuario)
+    prompt_final = PROMPT_DESCRICAO + contexto_pessoas + estilo
 
-    # 3. Descreve cada imagem
+    # 3. Descreve cada imagem — inclui Referer para sites que exigem
+    headers_img = {**headers, "Referer": url_base, "Accept": "image/*,*/*;q=0.8"}
     resultados = []
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers) as client:
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers_img) as client:
         for url_img in urls_filtradas:
             try:
                 r = await client.get(url_img)
