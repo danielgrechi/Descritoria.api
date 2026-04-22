@@ -76,7 +76,8 @@
 <!-- Navegação por abas -->
 <nav class="nav" role="tablist" aria-label="Seções do aplicativo">
   <button class="ativo" onclick="trocarAba('imagens', this)" role="tab" aria-selected="true">📷 Imagens</button>
-  <button onclick="trocarAba('perguntar', this)" role="tab">❓ Perguntar</button>
+  <button onclick="trocarAba('internet', this)" role="tab">🌐 Internet</button>
+  <button onclick="trocarAba('pessoas', this)" role="tab">🧠 Pessoas</button>
   <button onclick="trocarAba('documentos', this)" role="tab">📄 Documentos</button>
   <button onclick="trocarAba('estabelecimentos', this)" role="tab">🏪 Locais</button>
   <button onclick="trocarAba('conta', this)" role="tab">👤 Conta</button>
@@ -118,23 +119,84 @@
       <button class="btn-laranja" onclick="lerEmVoz('imagem')" aria-label="Ler descrição em voz alta">🔊 Ouvir Descrição</button>
       <button class="btn-cinza" onclick="pararVoz()" aria-label="Parar leitura">⏹ Parar</button>
     </div>
+
+    <!-- PAINEL PÓS-DESCRIÇÃO: aparece após a IA descrever -->
+    <div id="painelPosDescricao" style="display:none; margin-top:16px;">
+
+      <!-- Feedback -->
+      <div style="background:#2c2c2e;border-radius:12px;padding:16px;margin-bottom:12px;">
+        <h2 style="font-size:17px;margin-bottom:10px;">O que você achou desta descrição?</h2>
+        <div class="linha">
+          <button class="btn-verde" onclick="enviarFeedbackBom()" aria-label="Marcar descrição como boa">👍 Boa</button>
+          <button class="btn-vermelho" onclick="mostrarFormRuim()" aria-label="Marcar descrição como ruim">👎 Ruim</button>
+        </div>
+        <div id="formFeedbackRuim" style="display:none;margin-top:10px;">
+          <label for="comentarioRuim" style="display:block;margin-bottom:6px;color:#aaa;font-size:14px;">O que faltou ou o que você queria diferente? (a IA aprende com isso)</label>
+          <textarea id="comentarioRuim" rows="3" placeholder="Ex: descreva mais detalhes do corpo, seja mais direto, inclua cores..." aria-label="Comentário sobre o que melhorar"></textarea>
+          <button class="btn-azul" onclick="enviarFeedbackRuim()" aria-label="Enviar feedback negativo">Enviar</button>
+        </div>
+        <div class="status" id="statusFeedback" aria-live="polite"></div>
+      </div>
+
+      <!-- Pergunta inline -->
+      <div style="background:#2c2c2e;border-radius:12px;padding:16px;margin-bottom:12px;">
+        <h2 style="font-size:17px;margin-bottom:10px;">❓ Pergunte sobre esta imagem</h2>
+        <textarea id="perguntaTexto" rows="2" placeholder="Ex: Qual a cor do cabelo dela? Tem texto? O que tem ao fundo?" aria-label="Digite sua pergunta sobre a imagem"></textarea>
+        <button class="btn-azul" onclick="perguntarSobreImagem()" aria-label="Enviar pergunta">Perguntar</button>
+        <div class="status" id="statusPergunta" aria-live="polite"></div>
+        <div id="resultadoPergunta" class="resultado" aria-live="polite" style="display:none"></div>
+        <button id="btnOuvirResposta" class="btn-laranja" onclick="lerEmVoz('pergunta')" style="display:none" aria-label="Ouvir resposta em voz alta">🔊 Ouvir Resposta</button>
+      </div>
+
+      <!-- Nomear pessoa -->
+      <div style="background:#2c2c2e;border-radius:12px;padding:16px;margin-bottom:12px;">
+        <h2 style="font-size:17px;margin-bottom:10px;">🧠 Nomear pessoa da imagem</h2>
+        <p style="color:#aaa;font-size:14px;margin-bottom:10px;">Se houver alguém que você queira que a IA reconheça em imagens futuras, dê um nome. A descrição atual será usada como característica.</p>
+        <input type="text" id="nomePessoaImg" placeholder="Nome da pessoa" aria-label="Nome da pessoa para salvar na memória" />
+        <button class="btn-roxo" onclick="nomearPessoaDaImagem()" aria-label="Salvar pessoa na memória">💾 Salvar na memória</button>
+        <div class="status" id="statusNomearPessoa" aria-live="polite"></div>
+      </div>
+
+    </div>
   </section>
 </div>
 
-<!-- ABA: PERGUNTAR -->
-<div id="aba-perguntar" class="aba" role="tabpanel">
-  <section aria-label="Fazer pergunta sobre imagem">
-    <h2>❓ Perguntar sobre Imagem</h2>
-    <div class="destaque">Primeiro descreva uma imagem na aba "Imagens", depois volte aqui para fazer perguntas sobre ela.</div>
+<!-- ABA: INTERNET -->
+<div id="aba-internet" class="aba" role="tabpanel">
+  <section aria-label="Descrever imagens da internet">
+    <h2>🌐 Imagens da Internet</h2>
+    <p style="color:#888;margin-bottom:14px;font-size:15px">Cole a URL de uma imagem para descrevê-la, ou a URL de um site para descrever todas as imagens da página.</p>
 
-    <label for="perguntaTexto" style="display:block;margin-bottom:8px;color:#aaa;">Sua pergunta:</label>
-    <textarea id="perguntaTexto" rows="3" placeholder="Ex: Que cor é a camisa da pessoa? Tem texto na imagem? Qual é o ambiente?" aria-label="Digite sua pergunta sobre a imagem"></textarea>
+    <label for="urlInternet" style="display:block;margin-bottom:6px;color:#aaa;">URL da imagem ou página:</label>
+    <input type="text" id="urlInternet" placeholder="https://..." aria-label="URL da imagem ou página" />
 
-    <button class="btn-azul" onclick="perguntarSobreImagem()" aria-label="Enviar pergunta">❓ Perguntar</button>
+    <div class="linha">
+      <button class="btn-azul" onclick="descreverUrlImagem()" aria-label="Descrever imagem de uma URL">🖼 Imagem única</button>
+      <button class="btn-roxo" onclick="descreverPagina()" aria-label="Descrever todas as imagens de uma página">🌐 Página inteira</button>
+    </div>
 
-    <div class="status" id="statusPergunta" aria-live="polite"></div>
-    <div id="resultadoPergunta" class="resultado" aria-live="polite" style="display:none"></div>
-    <button id="btnOuvirResposta" class="btn-laranja" onclick="lerEmVoz('pergunta')" style="display:none" aria-label="Ouvir resposta em voz alta">🔊 Ouvir Resposta</button>
+    <div class="status" id="statusInternet" aria-live="polite"></div>
+    <div id="resultadoInternet" aria-live="polite"></div>
+  </section>
+</div>
+
+<!-- ABA: PESSOAS -->
+<div id="aba-pessoas" class="aba" role="tabpanel">
+  <section aria-label="Pessoas conhecidas">
+    <h2>🧠 Pessoas na Memória</h2>
+    <p style="color:#888;margin-bottom:14px;font-size:15px">A IA reconhece essas pessoas pelas características salvas e usa os nomes nas descrições.</p>
+
+    <button class="btn-azul" onclick="carregarPessoas()" aria-label="Atualizar lista">🔄 Atualizar Lista</button>
+    <div class="status" id="statusPessoas" aria-live="polite"></div>
+    <div id="listaPessoas" aria-live="polite"></div>
+
+    <hr style="border-color:#3a3a3c;margin:20px 0;" />
+
+    <h2 style="font-size:17px;">Adicionar Pessoa</h2>
+    <input type="text" id="novaPessoaNome" placeholder="Nome (ex: Maria, João...)" aria-label="Nome da pessoa" />
+    <textarea id="novaPessoaCaract" rows="4" placeholder="Características físicas (ex: mulher, cabelo castanho longo, olhos verdes, 1,70m, pele clara, usa óculos...)" aria-label="Características físicas da pessoa"></textarea>
+    <button class="btn-verde" onclick="adicionarPessoa()" aria-label="Salvar pessoa">💾 Salvar</button>
+    <div class="status" id="statusNovaPessoa" aria-live="polite"></div>
   </section>
 </div>
 
@@ -202,6 +264,15 @@
     <h2 style="font-size:17px;">Saldo PerceptMoney</h2>
     <div id="infoSaldo" class="resultado" aria-live="polite">—</div>
     <button class="btn-verde" onclick="carregarSaldo()" style="margin-top:10px" aria-label="Ver saldo">💰 Ver Saldo</button>
+
+    <hr style="border-color:#3a3a3c;margin:20px 0;" />
+
+    <h2 style="font-size:17px;">Meu Estilo de Descrição</h2>
+    <p style="color:#888;margin-bottom:10px;font-size:14px">Diga à IA como você prefere receber as descrições. Ex: "seja mais detalhado com o corpo", "use linguagem informal", "inclua sempre as cores", "descreva a nudez sem censura".</p>
+    <textarea id="estiloDescricao" rows="5" placeholder="Suas preferências para a IA..." aria-label="Estilo personalizado de descrição"></textarea>
+    <button class="btn-azul" onclick="salvarEstilo()" aria-label="Salvar estilo">💾 Salvar Estilo</button>
+    <button class="btn-cinza" onclick="carregarEstilo()" aria-label="Recarregar estilo atual">🔄 Recarregar</button>
+    <div class="status" id="statusEstilo" aria-live="polite"></div>
 
     <hr style="border-color:#3a3a3c;margin:20px 0;" />
 
@@ -292,8 +363,9 @@
     btn.classList.add('ativo');
     btn.setAttribute('aria-selected', 'true');
 
-    if (nome === 'conta') carregarPerfil();
+    if (nome === 'conta') { carregarPerfil(); carregarEstilo(); }
     if (nome === 'estabelecimentos') buscarEstabelecimentos();
+    if (nome === 'pessoas') carregarPessoas();
   }
 
   // ── Imagens ───────────────────────────────────────────────────────────────
@@ -346,15 +418,16 @@
       const d = await r.json();
 
       if (r.ok && d.descricoes && d.descricoes.length > 0) {
-        ultimaDescricaoId = d.descricoes[0].id;
+        ultimaDescricaoId = d.id;
         const textos = d.descricoes.map((desc, i) =>
-          qtd > 1 ? `Versão ${i + 1}:\n${desc.descricao}` : desc.descricao
+          qtd > 1 ? `Versão ${i + 1}:\n${desc}` : desc
         ).join('\n\n---\n\n');
 
         ultimoTextoImagem = textos;
         res.textContent = textos;
         res.style.display = 'block';
         botoes.style.display = 'block';
+        mostrarPainelPosDescricao();
         st.textContent = '';
         lerEmVoz('imagem');
       } else {
@@ -363,6 +436,18 @@
     } catch (e) {
       st.innerHTML = `<span class="erro">Erro de conexão: ${e.message}</span>`;
     }
+  }
+
+  function mostrarPainelPosDescricao() {
+    document.getElementById('painelPosDescricao').style.display = 'block';
+    document.getElementById('formFeedbackRuim').style.display = 'none';
+    document.getElementById('statusFeedback').textContent = '';
+    document.getElementById('statusNomearPessoa').textContent = '';
+    document.getElementById('comentarioRuim').value = '';
+    document.getElementById('nomePessoaImg').value = '';
+    document.getElementById('perguntaTexto').value = '';
+    document.getElementById('resultadoPergunta').style.display = 'none';
+    document.getElementById('statusPergunta').textContent = '';
   }
 
   async function perguntarSobreImagem() {
@@ -521,7 +606,7 @@
       const d = await r.json();
       if (r.ok) {
         document.getElementById('infoConta').innerHTML =
-          `<strong>Nome:</strong> ${d.nome}<br><strong>E-mail:</strong> ${d.email}<br><strong>Desde:</strong> ${new Date(d.criado_em).toLocaleDateString('pt-BR')}`;
+          `<strong>Nome:</strong> ${d.nome}<br><strong>E-mail:</strong> ${d.email}<br><strong>Desde:</strong> ${new Date(d.created_at).toLocaleDateString('pt-BR')}`;
       } else {
         document.getElementById('infoConta').innerHTML = `<span class="erro">${d.detail}</span>`;
       }
@@ -546,6 +631,246 @@
     localStorage.removeItem('descritoria_token');
     token = null;
     setStatus('Sessão encerrada. Recarregue a página.', 'erro');
+  }
+
+  // ── Feedback ──────────────────────────────────────────────────────────────
+
+  async function enviarFeedbackBom() {
+    if (!ultimaDescricaoId) { alert('Descreva uma imagem primeiro.'); return; }
+    const st = document.getElementById('statusFeedback');
+    st.textContent = 'Enviando...';
+    try {
+      const r = await fetch(`${API}/feedback/bom`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descricao_id: ultimaDescricaoId })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        st.innerHTML = '<span class="ok">✓ Obrigado! Feedback positivo registrado.</span>';
+      } else {
+        st.innerHTML = `<span class="erro">${d.detail || 'Erro ao enviar.'}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
+  }
+
+  function mostrarFormRuim() {
+    document.getElementById('formFeedbackRuim').style.display = 'block';
+    document.getElementById('comentarioRuim').focus();
+  }
+
+  async function enviarFeedbackRuim() {
+    if (!ultimaDescricaoId) { alert('Descreva uma imagem primeiro.'); return; }
+    const comentario = document.getElementById('comentarioRuim').value.trim();
+    if (comentario.length < 5) { alert('Escreva pelo menos 5 caracteres explicando o que não ficou bom.'); return; }
+    const st = document.getElementById('statusFeedback');
+    st.textContent = 'Enviando...';
+    try {
+      const r = await fetch(`${API}/feedback/ruim`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descricao_id: ultimaDescricaoId, comentario })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        st.innerHTML = '<span class="ok">✓ Feedback registrado. A IA aprendeu com seu comentário — será aplicado nas próximas descrições.</span>';
+        document.getElementById('formFeedbackRuim').style.display = 'none';
+      } else {
+        st.innerHTML = `<span class="erro">${d.detail || 'Erro ao enviar.'}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
+  }
+
+  // ── Nomear pessoa a partir da descrição ───────────────────────────────────
+
+  async function nomearPessoaDaImagem() {
+    const nome = document.getElementById('nomePessoaImg').value.trim();
+    if (!nome) { alert('Digite um nome.'); return; }
+    if (!ultimoTextoImagem) { alert('Descreva uma imagem primeiro.'); return; }
+    const st = document.getElementById('statusNomearPessoa');
+    st.textContent = 'Salvando...';
+    try {
+      const r = await fetch(`${API}/pessoas`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome, caracteristicas: ultimoTextoImagem })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        st.innerHTML = `<span class="ok">✓ ${nome} salvo(a) na memória. Será reconhecido(a) em próximas imagens.</span>`;
+        document.getElementById('nomePessoaImg').value = '';
+      } else {
+        st.innerHTML = `<span class="erro">${d.detail || 'Erro ao salvar.'}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
+  }
+
+  // ── Internet ──────────────────────────────────────────────────────────────
+
+  async function descreverUrlImagem() {
+    const url = document.getElementById('urlInternet').value.trim();
+    if (!url) { alert('Cole uma URL primeiro.'); return; }
+    const st = document.getElementById('statusInternet');
+    const res = document.getElementById('resultadoInternet');
+    st.textContent = 'Buscando e descrevendo imagem... pode demorar.';
+    res.innerHTML = '';
+    try {
+      const r = await fetch(`${API}/imagens/descrever-url`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, quantidade: 1 })
+      });
+      const d = await r.json();
+      if (r.ok && d.descricoes && d.descricoes.length > 0) {
+        ultimaDescricaoId = d.id;
+        ultimoTextoImagem = d.descricoes[0];
+        res.innerHTML = `<div class="resultado">${d.descricoes[0]}</div>`;
+        st.textContent = '';
+        lerEmVoz(d.descricoes[0]);
+      } else {
+        st.innerHTML = `<span class="erro">${d.detail || 'Erro ao descrever.'}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
+  }
+
+  async function descreverPagina() {
+    const url = document.getElementById('urlInternet').value.trim();
+    if (!url) { alert('Cole uma URL primeiro.'); return; }
+    const st = document.getElementById('statusInternet');
+    const res = document.getElementById('resultadoInternet');
+    st.textContent = 'Abrindo a página e descrevendo as imagens... pode demorar bastante.';
+    res.innerHTML = '';
+    try {
+      const r = await fetch(`${API}/imagens/descrever-pagina`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, limite: 5 })
+      });
+      const d = await r.json();
+      if (r.ok && d.imagens && d.imagens.length > 0) {
+        st.textContent = `${d.total_descritas} imagem(ns) descrita(s) de ${d.total_imagens_encontradas} encontrada(s).`;
+        res.innerHTML = d.imagens.map((img, i) => `
+          <div class="resultado" style="margin-bottom:10px;">
+            <strong>Imagem ${i + 1}</strong><br>
+            ${img.descricao}<br><br>
+            <button class="btn-laranja" onclick="lerEmVoz(\`${img.descricao.replace(/`/g, "'")}\`)">🔊 Ouvir</button>
+          </div>`).join('');
+      } else {
+        st.innerHTML = `<span class="erro">${d.detail || 'Não foi possível descrever.'}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
+  }
+
+  // ── Pessoas ───────────────────────────────────────────────────────────────
+
+  async function carregarPessoas() {
+    const st = document.getElementById('statusPessoas');
+    const lista = document.getElementById('listaPessoas');
+    st.textContent = 'Carregando...';
+    try {
+      const r = await fetch(`${API}/pessoas`, { headers: { Authorization: `Bearer ${token}` } });
+      const d = await r.json();
+      if (r.ok) {
+        if (!d.length) {
+          lista.innerHTML = '<p style="color:#888;margin-top:10px;">Nenhuma pessoa salva ainda.</p>';
+        } else {
+          lista.innerHTML = d.map(p => `
+            <div class="resultado" style="margin-bottom:10px;">
+              <strong>${p.nome}</strong><br>
+              <span style="color:#aaa;font-size:15px;">${p.caracteristicas}</span><br><br>
+              <button class="btn-vermelho" onclick="removerPessoa(${p.id}, '${p.nome.replace(/'/g, "\\'")}')">🗑 Remover</button>
+            </div>`).join('');
+        }
+        st.textContent = '';
+      } else {
+        st.innerHTML = `<span class="erro">${d.detail}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
+  }
+
+  async function adicionarPessoa() {
+    const nome = document.getElementById('novaPessoaNome').value.trim();
+    const caracteristicas = document.getElementById('novaPessoaCaract').value.trim();
+    if (!nome || !caracteristicas) { alert('Preencha nome e características.'); return; }
+    const st = document.getElementById('statusNovaPessoa');
+    st.textContent = 'Salvando...';
+    try {
+      const r = await fetch(`${API}/pessoas`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome, caracteristicas })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        st.innerHTML = '<span class="ok">✓ Pessoa salva!</span>';
+        document.getElementById('novaPessoaNome').value = '';
+        document.getElementById('novaPessoaCaract').value = '';
+        carregarPessoas();
+      } else {
+        st.innerHTML = `<span class="erro">${d.detail}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
+  }
+
+  async function removerPessoa(id, nome) {
+    if (!confirm(`Remover ${nome} da memória?`)) return;
+    try {
+      const r = await fetch(`${API}/pessoas/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (r.ok) carregarPessoas();
+    } catch {}
+  }
+
+  // ── Estilo de Descrição ───────────────────────────────────────────────────
+
+  async function carregarEstilo() {
+    if (!token) return;
+    try {
+      const r = await fetch(`${API}/usuario/estilo-descricao`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const d = await r.json();
+      if (r.ok) {
+        document.getElementById('estiloDescricao').value = d.estilo || '';
+      }
+    } catch {}
+  }
+
+  async function salvarEstilo() {
+    const estilo = document.getElementById('estiloDescricao').value;
+    const st = document.getElementById('statusEstilo');
+    st.textContent = 'Salvando...';
+    try {
+      const r = await fetch(`${API}/usuario/estilo-descricao`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estilo })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        st.innerHTML = '<span class="ok">✓ Estilo salvo. Será usado nas próximas descrições.</span>';
+      } else {
+        st.innerHTML = `<span class="erro">${d.detail}</span>`;
+      }
+    } catch (e) {
+      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    }
   }
 
   // ── Voz ───────────────────────────────────────────────────────────────────
