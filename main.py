@@ -11,7 +11,7 @@ import models
 import schemas
 from auth import criar_token, hash_senha, verificar_senha
 from database import Base, engine, get_db
-from routers import documentos, estabelecimentos, feedback, imagens, pessoas, skills, usuario, videos
+from routers import documentos, estabelecimentos, feedback, imagens, internet, pessoas, skills, usuario, videos
 
 # Cria as tabelas no banco de dados na inicialização
 Base.metadata.create_all(bind=engine)
@@ -54,6 +54,7 @@ def pagina_principal():
 # ── Routers ───────────────────────────────────────────────────────────────────
 
 app.include_router(imagens.router)
+app.include_router(internet.router)
 app.include_router(videos.router)
 app.include_router(documentos.router)
 app.include_router(estabelecimentos.router)
