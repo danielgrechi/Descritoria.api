@@ -364,16 +364,19 @@ async def descrever_imagens_pagina(
     if body.limite < 1 or body.limite > 10:
         raise HTTPException(status_code=422, detail="O limite deve ser entre 1 e 10 imagens.")
 
-    headers = {
+    # User-Agent desktop para que o site entregue o HTML completo
+    headers_pagina = {
         "User-Agent": (
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
-        )
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
     }
 
     # 1. Busca a página
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers=headers) as client:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers=headers_pagina) as client:
             resp = await client.get(body.url)
             resp.raise_for_status()
             html = resp.text
@@ -381,41 +384,66 @@ async def descrever_imagens_pagina(
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Não foi possível acessar o site: {str(e)}")
 
-    # 2. Extrai URLs de imagens
     soup = BeautifulSoup(html, "html.parser")
+    vistas: set[str] = set()
     urls_imagens: list[str] = []
 
-    # og:image (imagem principal do artigo/post)
-    og = soup.find("meta", property="og:image")
-    if og and og.get("content"):
-        urls_imagens.append(og["content"])
+    def adicionar(u: str):
+        if not u or u.startswith("data:"):
+            return
+        absoluta = urljoin(url_base, u.strip())
+        if absoluta not in vistas:
+            vistas.add(absoluta)
+            urls_imagens.append(absoluta)
 
-    # twitter:image
-    tw = soup.find("meta", attrs={"name": "twitter:image"})
-    if tw and tw.get("content"):
-        urls_imagens.append(tw["content"])
+    # og:image e twitter:image têm prioridade — são a foto principal da página
+    for prop in ["og:image", "og:image:secure_url"]:
+        tag = soup.find("meta", property=prop)
+        if tag and tag.get("content"):
+            adicionar(tag["content"])
 
-    # todas as tags <img>
+    for name in ["twitter:image", "twitter:image:src"]:
+        tag = soup.find("meta", attrs={"name": name})
+        if tag and tag.get("content"):
+            adicionar(tag["content"])
+
+    # Todos os atributos que sites usam para lazy-loading
+    ATTRS_SRC = ["src", "data-src", "data-lazy-src", "data-lazy", "data-original",
+                 "data-image", "data-img", "data-url", "data-bg", "data-photo",
+                 "data-hi-res-src", "data-full-src", "data-large", "data-zoom-image"]
+
     for img in soup.find_all("img"):
-        src = img.get("src") or img.get("data-src") or img.get("data-lazy-src") or img.get("data-original")
-        if src:
-            url_completa = urljoin(url_base, src)
-            if url_completa not in urls_imagens:
-                urls_imagens.append(url_completa)
+        for attr in ATTRS_SRC:
+            val = img.get(attr)
+            if val:
+                adicionar(val)
+                break
+        # srcset pode ter várias URLs — pega a de maior resolução
+        srcset = img.get("srcset") or img.get("data-srcset")
+        if srcset:
+            partes = [p.strip().split()[0] for p in srcset.split(",") if p.strip()]
+            if partes:
+                adicionar(partes[-1])
 
-    # Descarta apenas ruído óbvio (rastreadores, ícones minúsculos) — não exige extensão
-    EXCLUIR_NOMES = ["favicon", "pixel", "track", "1x1", "blank", "spacer", "ad.gif", "ads."]
-    urls_filtradas = []
-    for u in urls_imagens:
-        caminho = urlparse(u).path.lower()
-        nome = caminho.split("/")[-1]
-        if not any(k in nome for k in EXCLUIR_NOMES) and not any(k in u for k in EXCLUIR_NOMES):
-            urls_filtradas.append(u)
+    # Links <a> que apontam diretamente para imagens
+    EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp")
+    for a in soup.find_all("a", href=True):
+        href = a["href"].lower()
+        if any(href.endswith(e) for e in EXTS) or any(e in href for e in EXTS):
+            adicionar(a["href"])
+
+    # Remove ruído óbvio
+    EXCLUIR = ["favicon", "pixel", "track", "1x1", "blank", "spacer", "ad.gif",
+               "ads.", "doubleclick", "google-analytics", "googletagmanager"]
+    urls_filtradas = [
+        u for u in urls_imagens
+        if not any(k in u.lower() for k in EXCLUIR)
+    ]
 
     if not urls_filtradas:
         raise HTTPException(
             status_code=404,
-            detail="Nenhuma imagem encontrada nesta página. Tente outra URL."
+            detail="Nenhuma imagem encontrada nesta página. O site pode carregar imagens via JavaScript — tente copiar a URL direta de uma imagem e usar 'Imagem única'."
         )
 
     urls_filtradas = urls_filtradas[: body.limite]
@@ -423,9 +451,15 @@ async def descrever_imagens_pagina(
     estilo = _estilo_usuario(usuario)
     prompt_final = PROMPT_DESCRICAO + contexto_pessoas + estilo
 
-    # 3. Descreve cada imagem — inclui Referer para sites que exigem
-    headers_img = {**headers, "Referer": url_base, "Accept": "image/*,*/*;q=0.8"}
+    # Cabeçalhos para download: Referer = página de origem (evita hotlink protection)
+    headers_img = {
+        **headers_pagina,
+        "Referer": url_base,
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    }
+
     resultados = []
+    erros_debug = []
     async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers_img) as client:
         for url_img in urls_filtradas:
             try:
@@ -453,15 +487,15 @@ async def descrever_imagens_pagina(
                     "url_imagem": url_img,
                     "descricao": descricao,
                 })
-            except Exception:
-                # ignora imagens que falharem e continua com as próximas
+            except Exception as e:
+                erros_debug.append(f"{url_img[:80]} → {type(e).__name__}: {str(e)[:80]}")
                 continue
 
     if not resultados:
-        raise HTTPException(
-            status_code=502,
-            detail="Encontrei imagens na página mas não consegui descrevê-las. Tente novamente."
-        )
+        detalhe = f"Encontrei {len(urls_filtradas)} URL(s) mas não consegui baixar nenhuma imagem válida."
+        if erros_debug:
+            detalhe += " Erros: " + " | ".join(erros_debug[:3])
+        raise HTTPException(status_code=502, detail=detalhe)
 
     return {
         "pagina_url": body.url,
