@@ -73,6 +73,16 @@ def imagem_para_data_uri(dados: bytes, mime_type: str) -> str:
     return f"data:{mime_type};base64,{b64}"
 
 
+def _estilo_usuario(usuario) -> str:
+    """Adiciona as preferências de estilo do usuário ao prompt."""
+    estilo = getattr(usuario, "estilo_descricao", "") or ""
+    if not estilo.strip():
+        return ""
+    return (
+        f"\n\nINSTRUÇÕES PESSOAIS DO USUÁRIO (siga obrigatoriamente):\n{estilo}\n"
+    )
+
+
 def _contexto_pessoas(usuario_id: int, db) -> str:
     """Retorna texto com pessoas conhecidas para incluir no prompt."""
     from models import Pessoa
@@ -114,7 +124,8 @@ async def descrever_imagem(
     conteudo_hash = hashlib.md5(dados).hexdigest()
 
     contexto_pessoas = _contexto_pessoas(usuario.id, db)
-    prompt_final = PROMPT_DESCRICAO + contexto_pessoas
+    estilo = _estilo_usuario(usuario)
+    prompt_final = PROMPT_DESCRICAO + contexto_pessoas + estilo
 
     try:
         descricoes = [chamar_modelo(data_uri, prompt_final) for _ in range(quantidade)]

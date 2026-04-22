@@ -67,6 +67,20 @@ def feedback_ruim(
         comentario=body.comentario,
     )
     db.add(feedback)
+
+    # Aprende com o feedback: adiciona a preferência ao estilo do usuário
+    if body.comentario:
+        estilo_atual = usuario.estilo_descricao or ""
+        nova_instrucao = body.comentario.strip()
+        if nova_instrucao not in estilo_atual:
+            if estilo_atual:
+                usuario.estilo_descricao = estilo_atual + "\n- " + nova_instrucao
+            else:
+                usuario.estilo_descricao = "- " + nova_instrucao
+
     db.commit()
     db.refresh(feedback)
-    return schemas.FeedbackResponse.from_orm(feedback)
+    return {
+        **schemas.FeedbackResponse.from_orm(feedback).dict(),
+        "aprendizado": "Sua preferência foi salva e será usada nas próximas descrições.",
+    }

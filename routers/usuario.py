@@ -133,6 +133,28 @@ def atualizar_configuracoes(
     )
 
 
+@router.get("/estilo-descricao", summary="Obter estilo personalizado de descrição")
+def obter_estilo(usuario: models.Usuario = Depends(obter_usuario_atual)):
+    return {
+        "estilo": usuario.estilo_descricao or "",
+        "ativo": bool(usuario.estilo_descricao),
+    }
+
+
+@router.put("/estilo-descricao", summary="Definir como a IA deve descrever imagens para você")
+def atualizar_estilo(
+    body: dict,
+    db: Session = Depends(get_db),
+    usuario: models.Usuario = Depends(obter_usuario_atual),
+):
+    estilo = body.get("estilo", "").strip()
+    if len(estilo) > 1000:
+        raise HTTPException(status_code=422, detail="O estilo deve ter no máximo 1000 caracteres.")
+    usuario.estilo_descricao = estilo
+    db.commit()
+    return {"mensagem": "Estilo atualizado com sucesso.", "estilo": estilo}
+
+
 @router.post("/integracoes/{rede}", summary="Vincular rede social")
 def vincular_rede_social(
     rede: str,

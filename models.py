@@ -34,6 +34,7 @@ class Usuario(Base):
     saldo_perceptmoney = Column(Float, default=0.0)
     config_voz = Column(String, default="padrao")
     integracoes = Column(Text, default="{}")
+    estilo_descricao = Column(Text, default="")  # instruções personalizadas do usuário para a IA
     created_at = Column(DateTime, default=datetime.utcnow)
 
     descricoes = relationship("Descricao", back_populates="usuario")
