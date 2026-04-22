@@ -1,7 +1,9 @@
 import base64
 import hashlib
 import io
+import json
 import os
+import re
 from typing import List, Optional
 from urllib.parse import urljoin, urlparse
 
@@ -426,15 +428,41 @@ async def descrever_imagens_pagina(
                 adicionar(partes[-1])
 
     # Links <a> que apontam diretamente para imagens
-    EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp")
+    EXTS_IMAGEM = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp")
     for a in soup.find_all("a", href=True):
         href = a["href"].lower()
-        if any(href.endswith(e) for e in EXTS) or any(e in href for e in EXTS):
+        if any(href.endswith(e) for e in EXTS_IMAGEM):
             adicionar(a["href"])
 
-    # Remove ruído óbvio
+    # __NEXT_DATA__ — Next.js embute todos os dados da página como JSON
+    next_data_tag = soup.find("script", id="__NEXT_DATA__")
+    if next_data_tag and next_data_tag.string:
+        try:
+            next_data = json.loads(next_data_tag.string)
+            next_str = json.dumps(next_data)
+            # extrai todas as URLs que parecem fotos dentro do JSON
+            for url_json in re.findall(r'https?://[^\s\'"<>]+\.(?:jpg|jpeg|png|webp|gif|avif)', next_str, re.IGNORECASE):
+                adicionar(url_json)
+        except Exception:
+            pass
+
+    # JSON-LD (schema.org) — contém imagens do produto/perfil
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            dados_ld = json.loads(script.string or "")
+            ld_str = json.dumps(dados_ld)
+            for url_ld in re.findall(r'https?://[^\s\'"<>]+\.(?:jpg|jpeg|png|webp|gif|avif)', ld_str, re.IGNORECASE):
+                adicionar(url_ld)
+        except Exception:
+            pass
+
+    # Regex geral em todo o HTML — captura URLs de imagem embutidas em JS inline
+    for url_inline in re.findall(r'https?://[^\s\'"<>]+\.(?:jpg|jpeg|png|webp|avif)', html, re.IGNORECASE):
+        adicionar(url_inline)
+
+    # Remove ruído óbvio e SVGs (PIL não processa SVG)
     EXCLUIR = ["favicon", "pixel", "track", "1x1", "blank", "spacer", "ad.gif",
-               "ads.", "doubleclick", "google-analytics", "googletagmanager"]
+               "ads.", "doubleclick", "google-analytics", "googletagmanager", ".svg"]
     urls_filtradas = [
         u for u in urls_imagens
         if not any(k in u.lower() for k in EXCLUIR)
