@@ -465,32 +465,59 @@ async def descrever_imagens_pagina(
     estilo = _estilo_usuario(usuario)
     prompt_final = PROMPT_DESCRICAO + contexto_pessoas + estilo
 
+    # Cabeçalhos para download com Referer (evita hotlink protection)
+    headers_img = {
+        **headers_pagina,
+        "Referer": url_base,
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    }
+
     resultados = []
     erros_debug = []
     for url_img in urls_filtradas:
+        descricao = None
+        # Tentativa 1: passa URL direto ao Replicate (rápido, sem download)
         try:
             descricao = chamar_modelo_url(url_img, prompt_final)
+        except Exception as e1:
+            erro_str = str(e1)
+            # Tentativa 2: site usa hotlink protection → baixa com Referer e envia como data URI
+            if any(c in erro_str for c in ["404", "403", "401", "forbidden", "not found", "not be"]):
+                try:
+                    async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers_img) as img_client:
+                        r = await img_client.get(url_img)
+                        r.raise_for_status()
+                        dados = r.content
+                        mime_type = validar_imagem(dados)
+                        data_uri = imagem_para_data_uri(dados, mime_type)
+                        descricao = chamar_modelo(data_uri, prompt_final)
+                except Exception as e2:
+                    erros_debug.append(f"{url_img[:70]} → fallback: {str(e2)[:60]}")
+                    continue
+            else:
+                erros_debug.append(f"{url_img[:70]} → {type(e1).__name__}: {erro_str[:60]}")
+                continue
 
-            registro = models.Descricao(
-                usuario_id=usuario.id,
-                tipo=models.TipoDescricao.foto,
-                conteudo_hash=hashlib.md5(url_img.encode()).hexdigest(),
-                descricao=descricao,
-                modelo=MODELO_IMAGEM,
-                formato_original="image/jpeg",
-            )
-            db.add(registro)
-            db.commit()
-            db.refresh(registro)
-
-            resultados.append({
-                "id": registro.id,
-                "url_imagem": url_img,
-                "descricao": descricao,
-            })
-        except Exception as e:
-            erros_debug.append(f"{url_img[:80]} → {type(e).__name__}: {str(e)[:80]}")
+        if not descricao:
             continue
+
+        registro = models.Descricao(
+            usuario_id=usuario.id,
+            tipo=models.TipoDescricao.foto,
+            conteudo_hash=hashlib.md5(url_img.encode()).hexdigest(),
+            descricao=descricao,
+            modelo=MODELO_IMAGEM,
+            formato_original="image/jpeg",
+        )
+        db.add(registro)
+        db.commit()
+        db.refresh(registro)
+
+        resultados.append({
+            "id": registro.id,
+            "url_imagem": url_img,
+            "descricao": descricao,
+        })
 
     if not resultados:
         detalhe = f"Encontrei {len(urls_filtradas)} URL(s) mas não consegui baixar nenhuma imagem válida."
