@@ -23,7 +23,7 @@ from database import get_db
 router = APIRouter(prefix="/imagens", tags=["Imagens"])
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
-MODELO_IMAGEM = "yorickvp/llava-13b:80537f9eead1a0bf472503ec4ea45a3799ae5dfd9fac53e39967d1dc6366f8fe"
+MODELO_IMAGEM = "yorickvp/llava-13b"
 MODELO_TEXTO = "meta/llama-3.1-8b-instruct"
 
 TIPOS_IMAGEM_PERMITIDOS = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"}
@@ -118,6 +118,16 @@ def chamar_modelo(data_uri: str, prompt: str) -> str:
     saida = client.run(
         MODELO_IMAGEM,
         input={"image": data_uri, "prompt": prompt, "max_new_tokens": 1024, "temperature": 0.2},
+    )
+    return "".join(saida).strip()
+
+
+def chamar_modelo_url(url_imagem: str, prompt: str) -> str:
+    """Passa a URL diretamente ao Replicate — mais rápido e sem limites de tamanho."""
+    client = replicate.Client(api_token=REPLICATE_API_TOKEN)
+    saida = client.run(
+        MODELO_IMAGEM,
+        input={"image": url_imagem, "prompt": prompt, "max_new_tokens": 1024, "temperature": 0.2},
     )
     return "".join(saida).strip()
 
@@ -295,35 +305,11 @@ async def descrever_imagem_url(
     if body.quantidade < 1 or body.quantidade > 3:
         raise HTTPException(status_code=422, detail="O parâmetro 'quantidade' deve ser entre 1 e 3.")
 
-    try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-            resposta_http = await client.get(body.url)
-            resposta_http.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=422, detail=f"Erro ao acessar URL: {e.response.status_code}")
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Não foi possível acessar a URL: {str(e)}")
-
-    dados = resposta_http.content
-    content_type = resposta_http.headers.get("content-type", "")
-
-    if "image" not in content_type and not any(
-        body.url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"]
-    ):
-        raise HTTPException(status_code=422, detail="A URL não aponta para uma imagem válida.")
-
-    try:
-        mime_type = validar_imagem(dados)
-    except HTTPException:
-        raise HTTPException(status_code=422, detail="O conteúdo da URL não é uma imagem válida.")
-
-    data_uri = imagem_para_data_uri(dados, mime_type)
-    conteudo_hash = hashlib.md5(dados).hexdigest()
     contexto_pessoas = _contexto_pessoas(usuario.id, db)
     prompt_final = PROMPT_DESCRICAO + contexto_pessoas
 
     try:
-        descricoes = [chamar_modelo(data_uri, prompt_final) for _ in range(body.quantidade)]
+        descricoes = [chamar_modelo_url(body.url, prompt_final) for _ in range(body.quantidade)]
     except replicate.exceptions.ReplicateError as e:
         raise HTTPException(status_code=502, detail=f"Erro na API Replicate: {str(e)}")
     except Exception as e:
@@ -332,10 +318,10 @@ async def descrever_imagem_url(
     registro = models.Descricao(
         usuario_id=usuario.id,
         tipo=models.TipoDescricao.foto,
-        conteudo_hash=conteudo_hash,
+        conteudo_hash=hashlib.md5(body.url.encode()).hexdigest(),
         descricao=descricoes[0],
         modelo=MODELO_IMAGEM,
-        formato_original=mime_type,
+        formato_original="image/jpeg",
     )
     db.add(registro)
     db.commit()
@@ -345,7 +331,7 @@ async def descrever_imagem_url(
         "id": registro.id,
         "descricoes": descricoes,
         "modelo": MODELO_IMAGEM,
-        "formato_original": mime_type,
+        "formato_original": "image/jpeg",
         "tipo": "foto",
         "url_origem": body.url,
         "created_at": registro.created_at,
@@ -479,45 +465,32 @@ async def descrever_imagens_pagina(
     estilo = _estilo_usuario(usuario)
     prompt_final = PROMPT_DESCRICAO + contexto_pessoas + estilo
 
-    # Cabeçalhos para download: Referer = página de origem (evita hotlink protection)
-    headers_img = {
-        **headers_pagina,
-        "Referer": url_base,
-        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-    }
-
     resultados = []
     erros_debug = []
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers_img) as client:
-        for url_img in urls_filtradas:
-            try:
-                r = await client.get(url_img)
-                r.raise_for_status()
-                dados = r.content
-                mime_type = validar_imagem(dados)
-                data_uri = imagem_para_data_uri(dados, mime_type)
-                descricao = chamar_modelo(data_uri, prompt_final)
+    for url_img in urls_filtradas:
+        try:
+            descricao = chamar_modelo_url(url_img, prompt_final)
 
-                registro = models.Descricao(
-                    usuario_id=usuario.id,
-                    tipo=models.TipoDescricao.foto,
-                    conteudo_hash=hashlib.md5(dados).hexdigest(),
-                    descricao=descricao,
-                    modelo=MODELO_IMAGEM,
-                    formato_original=mime_type,
-                )
-                db.add(registro)
-                db.commit()
-                db.refresh(registro)
+            registro = models.Descricao(
+                usuario_id=usuario.id,
+                tipo=models.TipoDescricao.foto,
+                conteudo_hash=hashlib.md5(url_img.encode()).hexdigest(),
+                descricao=descricao,
+                modelo=MODELO_IMAGEM,
+                formato_original="image/jpeg",
+            )
+            db.add(registro)
+            db.commit()
+            db.refresh(registro)
 
-                resultados.append({
-                    "id": registro.id,
-                    "url_imagem": url_img,
-                    "descricao": descricao,
-                })
-            except Exception as e:
-                erros_debug.append(f"{url_img[:80]} → {type(e).__name__}: {str(e)[:80]}")
-                continue
+            resultados.append({
+                "id": registro.id,
+                "url_imagem": url_img,
+                "descricao": descricao,
+            })
+        except Exception as e:
+            erros_debug.append(f"{url_img[:80]} → {type(e).__name__}: {str(e)[:80]}")
+            continue
 
     if not resultados:
         detalhe = f"Encontrei {len(urls_filtradas)} URL(s) mas não consegui baixar nenhuma imagem válida."
