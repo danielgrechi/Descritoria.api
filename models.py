@@ -42,6 +42,7 @@ class Usuario(Base):
     assinaturas = relationship("SkillAssinatura", back_populates="usuario")
     transacoes = relationship("Transacao", back_populates="usuario")
     cartoes = relationship("Cartao", back_populates="usuario")
+    pessoas_conhecidas = relationship("Pessoa", back_populates="usuario")
 
 
 class Descricao(Base):
@@ -153,3 +154,16 @@ class Cartao(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     usuario = relationship("Usuario", back_populates="cartoes")
+
+
+class Pessoa(Base):
+    __tablename__ = "pessoas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    nome = Column(String, nullable=False)
+    caracteristicas = Column(Text, nullable=False)  # descrição física armazenada
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    usuario = relationship("Usuario", back_populates="pessoas_conhecidas")

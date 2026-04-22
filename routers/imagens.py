@@ -4,9 +4,11 @@ import io
 import os
 from typing import List, Optional
 
+import httpx
 import replicate
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from PIL import Image
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 import models
@@ -69,6 +71,19 @@ def imagem_para_data_uri(dados: bytes, mime_type: str) -> str:
     return f"data:{mime_type};base64,{b64}"
 
 
+def _contexto_pessoas(usuario_id: int, db) -> str:
+    """Retorna texto com pessoas conhecidas para incluir no prompt."""
+    from models import Pessoa
+    pessoas = db.query(Pessoa).filter(Pessoa.usuario_id == usuario_id).all()
+    if not pessoas:
+        return ""
+    lista = "\n".join(f"- {p.nome}: {p.caracteristicas}" for p in pessoas)
+    return (
+        f"\n\nPESSOAS CONHECIDAS PELO USUÁRIO (use os nomes se reconhecer alguém):\n{lista}\n"
+        "Se alguma pessoa na imagem corresponder às características acima, mencione o nome dela na descrição."
+    )
+
+
 def chamar_modelo(data_uri: str, prompt: str) -> str:
     client = replicate.Client(api_token=REPLICATE_API_TOKEN)
     saida = client.run(
@@ -96,8 +111,11 @@ async def descrever_imagem(
     data_uri = imagem_para_data_uri(dados, mime_type)
     conteudo_hash = hashlib.md5(dados).hexdigest()
 
+    contexto_pessoas = _contexto_pessoas(usuario.id, db)
+    prompt_final = PROMPT_DESCRICAO + contexto_pessoas
+
     try:
-        descricoes = [chamar_modelo(data_uri, PROMPT_DESCRICAO) for _ in range(quantidade)]
+        descricoes = [chamar_modelo(data_uri, prompt_final) for _ in range(quantidade)]
     except replicate.exceptions.ReplicateError as e:
         raise HTTPException(status_code=502, detail=f"Erro na API Replicate: {str(e)}")
     except Exception as e:
@@ -231,6 +249,77 @@ def salvar_descricao(
     registro.salvo = True
     db.commit()
     return {"mensagem": "Descrição salva com sucesso."}
+
+
+class DescricaoUrlRequest(BaseModel):
+    url: str
+    quantidade: int = 1
+
+
+@router.post("/descrever-url", summary="Descreve imagem a partir de URL da internet")
+async def descrever_imagem_url(
+    body: DescricaoUrlRequest,
+    db: Session = Depends(get_db),
+    usuario: models.Usuario = Depends(obter_usuario_atual),
+):
+    if body.quantidade < 1 or body.quantidade > 3:
+        raise HTTPException(status_code=422, detail="O parâmetro 'quantidade' deve ser entre 1 e 3.")
+
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            resposta_http = await client.get(body.url)
+            resposta_http.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=422, detail=f"Erro ao acessar URL: {e.response.status_code}")
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Não foi possível acessar a URL: {str(e)}")
+
+    dados = resposta_http.content
+    content_type = resposta_http.headers.get("content-type", "")
+
+    if "image" not in content_type and not any(
+        body.url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"]
+    ):
+        raise HTTPException(status_code=422, detail="A URL não aponta para uma imagem válida.")
+
+    try:
+        mime_type = validar_imagem(dados)
+    except HTTPException:
+        raise HTTPException(status_code=422, detail="O conteúdo da URL não é uma imagem válida.")
+
+    data_uri = imagem_para_data_uri(dados, mime_type)
+    conteudo_hash = hashlib.md5(dados).hexdigest()
+    contexto_pessoas = _contexto_pessoas(usuario.id, db)
+    prompt_final = PROMPT_DESCRICAO + contexto_pessoas
+
+    try:
+        descricoes = [chamar_modelo(data_uri, prompt_final) for _ in range(body.quantidade)]
+    except replicate.exceptions.ReplicateError as e:
+        raise HTTPException(status_code=502, detail=f"Erro na API Replicate: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
+    registro = models.Descricao(
+        usuario_id=usuario.id,
+        tipo=models.TipoDescricao.foto,
+        conteudo_hash=conteudo_hash,
+        descricao=descricoes[0],
+        modelo=MODELO_IMAGEM,
+        formato_original=mime_type,
+    )
+    db.add(registro)
+    db.commit()
+    db.refresh(registro)
+
+    return {
+        "id": registro.id,
+        "descricoes": descricoes,
+        "modelo": MODELO_IMAGEM,
+        "formato_original": mime_type,
+        "tipo": "foto",
+        "url_origem": body.url,
+        "created_at": registro.created_at,
+    }
 
 
 @router.delete("/historico/{descricao_id}", summary="Remover descrição do histórico")
