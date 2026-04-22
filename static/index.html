@@ -72,6 +72,9 @@
 <h1>Descritoria</h1>
 <p class="subtitulo">Acessibilidade visual com inteligência artificial</p>
 <div id="statusGlobal" aria-live="polite">Conectando...</div>
+<div id="btnReconectarDiv" style="display:none;text-align:center;margin-bottom:12px;">
+  <button class="btn-azul" onclick="reconectar()" style="width:auto;padding:12px 24px;" aria-label="Tentar reconectar ao servidor">🔄 Reconectar</button>
+</div>
 
 <!-- Navegação por abas -->
 <nav class="nav" role="tablist" aria-label="Seções do aplicativo">
@@ -315,6 +318,7 @@
 
   async function registrarOuLogin() {
     setStatus('Criando sessão...');
+    document.getElementById('btnReconectarDiv').style.display = 'none';
     const email = 'usuario@descritoria.app';
     const senha = 'Descritoria@2025';
 
@@ -337,9 +341,34 @@
       const d = await r.json();
       if (d.access_token) { salvarToken(d.access_token); return; }
       setStatus('Erro ao conectar: ' + (d.detail || 'verifique o servidor'), 'erro');
+      document.getElementById('btnReconectarDiv').style.display = 'block';
     } catch (e) {
-      setStatus('Servidor não encontrado. Verifique se está rodando.', 'erro');
+      setStatus('Servidor não encontrado. Toque em Reconectar.', 'erro');
+      document.getElementById('btnReconectarDiv').style.display = 'block';
     }
+  }
+
+  async function reconectar() {
+    localStorage.removeItem('descritoria_token');
+    token = null;
+    document.getElementById('btnReconectarDiv').style.display = 'none';
+    await inicializar();
+  }
+
+  // Renova token automaticamente quando API retorna 401
+  async function fetchComAuth(url, options = {}) {
+    if (!token) await registrarOuLogin();
+    options.headers = { ...(options.headers || {}), Authorization: `Bearer ${token}` };
+    let r = await fetch(url, options);
+    if (r.status === 401) {
+      localStorage.removeItem('descritoria_token');
+      token = null;
+      await registrarOuLogin();
+      if (!token) return r;
+      options.headers.Authorization = `Bearer ${token}`;
+      r = await fetch(url, options);
+    }
+    return r;
   }
 
   function salvarToken(t) {
@@ -410,9 +439,8 @@
     form.append('quantidade', String(qtd));
 
     try {
-      const r = await fetch(`${API}/imagens/descrever`, {
+      const r = await fetchComAuth(`${API}/imagens/descrever`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: form
       });
       const d = await r.json();
@@ -463,9 +491,9 @@
     if (!token) await registrarOuLogin();
 
     try {
-      const r = await fetch(`${API}/imagens/perguntar`, {
+      const r = await fetchComAuth(`${API}/imagens/perguntar`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ descricao_id: ultimaDescricaoId, pergunta })
       });
       const d = await r.json();
@@ -640,9 +668,9 @@
     const st = document.getElementById('statusFeedback');
     st.textContent = 'Enviando...';
     try {
-      const r = await fetch(`${API}/feedback/bom`, {
+      const r = await fetchComAuth(`${API}/feedback/bom`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ descricao_id: ultimaDescricaoId })
       });
       const d = await r.json();
@@ -668,9 +696,9 @@
     const st = document.getElementById('statusFeedback');
     st.textContent = 'Enviando...';
     try {
-      const r = await fetch(`${API}/feedback/ruim`, {
+      const r = await fetchComAuth(`${API}/feedback/ruim`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ descricao_id: ultimaDescricaoId, comentario })
       });
       const d = await r.json();
@@ -694,9 +722,9 @@
     const st = document.getElementById('statusNomearPessoa');
     st.textContent = 'Salvando...';
     try {
-      const r = await fetch(`${API}/pessoas`, {
+      const r = await fetchComAuth(`${API}/pessoas`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome, caracteristicas: ultimoTextoImagem })
       });
       const d = await r.json();
@@ -721,9 +749,9 @@
     st.textContent = 'Buscando e descrevendo imagem... pode demorar.';
     res.innerHTML = '';
     try {
-      const r = await fetch(`${API}/imagens/descrever-url`, {
+      const r = await fetchComAuth(`${API}/imagens/descrever-url`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, quantidade: 1 })
       });
       const d = await r.json();
@@ -749,9 +777,9 @@
     st.textContent = 'Abrindo a página e descrevendo as imagens... pode demorar bastante.';
     res.innerHTML = '';
     try {
-      const r = await fetch(`${API}/imagens/descrever-pagina`, {
+      const r = await fetchComAuth(`${API}/imagens/descrever-pagina`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, limite: 5 })
       });
       const d = await r.json();
@@ -778,7 +806,7 @@
     const lista = document.getElementById('listaPessoas');
     st.textContent = 'Carregando...';
     try {
-      const r = await fetch(`${API}/pessoas`, { headers: { Authorization: `Bearer ${token}` } });
+      const r = await fetchComAuth(`${API}/pessoas`);
       const d = await r.json();
       if (r.ok) {
         if (!d.length) {
@@ -807,9 +835,9 @@
     const st = document.getElementById('statusNovaPessoa');
     st.textContent = 'Salvando...';
     try {
-      const r = await fetch(`${API}/pessoas`, {
+      const r = await fetchComAuth(`${API}/pessoas`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome, caracteristicas })
       });
       const d = await r.json();
@@ -829,10 +857,7 @@
   async function removerPessoa(id, nome) {
     if (!confirm(`Remover ${nome} da memória?`)) return;
     try {
-      const r = await fetch(`${API}/pessoas/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const r = await fetchComAuth(`${API}/pessoas/${id}`, { method: 'DELETE' });
       if (r.ok) carregarPessoas();
     } catch {}
   }
@@ -842,9 +867,7 @@
   async function carregarEstilo() {
     if (!token) return;
     try {
-      const r = await fetch(`${API}/usuario/estilo-descricao`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const r = await fetchComAuth(`${API}/usuario/estilo-descricao`);
       const d = await r.json();
       if (r.ok) {
         document.getElementById('estiloDescricao').value = d.estilo || '';
@@ -857,9 +880,9 @@
     const st = document.getElementById('statusEstilo');
     st.textContent = 'Salvando...';
     try {
-      const r = await fetch(`${API}/usuario/estilo-descricao`, {
+      const r = await fetchComAuth(`${API}/usuario/estilo-descricao`, {
         method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estilo })
       });
       const d = await r.json();
