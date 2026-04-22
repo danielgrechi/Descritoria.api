@@ -3,9 +3,11 @@ import hashlib
 import io
 import os
 from typing import List, Optional
+from urllib.parse import urljoin, urlparse
 
 import httpx
 import replicate
+from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from PIL import Image
 from pydantic import BaseModel
@@ -319,6 +321,131 @@ async def descrever_imagem_url(
         "tipo": "foto",
         "url_origem": body.url,
         "created_at": registro.created_at,
+    }
+
+
+class PaginaUrlRequest(BaseModel):
+    url: str
+    limite: int = 5  # máximo de imagens a descrever por página
+
+
+@router.post("/descrever-pagina", summary="Entra em um site e descreve todas as imagens encontradas")
+async def descrever_imagens_pagina(
+    body: PaginaUrlRequest,
+    db: Session = Depends(get_db),
+    usuario: models.Usuario = Depends(obter_usuario_atual),
+):
+    if body.limite < 1 or body.limite > 10:
+        raise HTTPException(status_code=422, detail="O limite deve ser entre 1 e 10 imagens.")
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        )
+    }
+
+    # 1. Busca a página
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers=headers) as client:
+            resp = await client.get(body.url)
+            resp.raise_for_status()
+            html = resp.text
+            url_base = str(resp.url)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Não foi possível acessar o site: {str(e)}")
+
+    # 2. Extrai URLs de imagens
+    soup = BeautifulSoup(html, "html.parser")
+    urls_imagens: list[str] = []
+
+    # og:image (imagem principal do artigo/post)
+    og = soup.find("meta", property="og:image")
+    if og and og.get("content"):
+        urls_imagens.append(og["content"])
+
+    # twitter:image
+    tw = soup.find("meta", attrs={"name": "twitter:image"})
+    if tw and tw.get("content"):
+        urls_imagens.append(tw["content"])
+
+    # todas as tags <img>
+    for img in soup.find_all("img"):
+        src = img.get("src") or img.get("data-src") or img.get("data-lazy-src") or img.get("data-original")
+        if src:
+            url_completa = urljoin(url_base, src)
+            if url_completa not in urls_imagens:
+                urls_imagens.append(url_completa)
+
+    # filtra URLs que parecem imagens reais (evita ícones e rastreadores)
+    extensoes_imagem = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif")
+    urls_filtradas = []
+    for u in urls_imagens:
+        caminho = urlparse(u).path.lower()
+        # inclui se tem extensão de imagem ou se veio do og/twitter
+        if any(caminho.endswith(ext) for ext in extensoes_imagem) or u in [
+            (og["content"] if og and og.get("content") else ""),
+            (tw["content"] if tw and tw.get("content") else ""),
+        ]:
+            # descarta ícones e imagens muito pequenas pelo nome
+            nome = caminho.split("/")[-1]
+            if not any(k in nome for k in ["icon", "logo", "favicon", "pixel", "track", "1x1"]):
+                urls_filtradas.append(u)
+
+    if not urls_filtradas:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhuma imagem encontrada nesta página. Tente outra URL."
+        )
+
+    urls_filtradas = urls_filtradas[: body.limite]
+    contexto_pessoas = _contexto_pessoas(usuario.id, db)
+    prompt_final = PROMPT_DESCRICAO + contexto_pessoas
+
+    # 3. Descreve cada imagem
+    resultados = []
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers) as client:
+        for url_img in urls_filtradas:
+            try:
+                r = await client.get(url_img)
+                r.raise_for_status()
+                dados = r.content
+                mime_type = validar_imagem(dados)
+                data_uri = imagem_para_data_uri(dados, mime_type)
+                descricao = chamar_modelo(data_uri, prompt_final)
+
+                registro = models.Descricao(
+                    usuario_id=usuario.id,
+                    tipo=models.TipoDescricao.foto,
+                    conteudo_hash=hashlib.md5(dados).hexdigest(),
+                    descricao=descricao,
+                    modelo=MODELO_IMAGEM,
+                    formato_original=mime_type,
+                )
+                db.add(registro)
+                db.commit()
+                db.refresh(registro)
+
+                resultados.append({
+                    "id": registro.id,
+                    "url_imagem": url_img,
+                    "descricao": descricao,
+                })
+            except Exception:
+                # ignora imagens que falharem e continua com as próximas
+                continue
+
+    if not resultados:
+        raise HTTPException(
+            status_code=502,
+            detail="Encontrei imagens na página mas não consegui descrevê-las. Tente novamente."
+        )
+
+    return {
+        "pagina_url": body.url,
+        "total_imagens_encontradas": len(urls_filtradas),
+        "total_descritas": len(resultados),
+        "imagens": resultados,
     }
 
 
