@@ -15,7 +15,7 @@ from database import get_db
 router = APIRouter(prefix="/documentos", tags=["Documentos"])
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
-MODELO_DOCUMENTO = "yorickvp/llava-13b"
+MODELO_DOCUMENTO = "meta/llama-3.2-11b-vision-instruct"
 
 TIPOS_PERMITIDOS = {
     "image/jpeg", "image/png", "image/webp", "image/bmp", "image/tiff",
@@ -99,6 +99,7 @@ async def ler_documento(
 
     return {
         "id": registro.id,
+        "texto": transcricao,
         "transcricao": transcricao,
         "modelo": MODELO_DOCUMENTO,
         "formato_original": mime_type,

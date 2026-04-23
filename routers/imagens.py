@@ -23,7 +23,7 @@ from database import get_db
 router = APIRouter(prefix="/imagens", tags=["Imagens"])
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
-MODELO_IMAGEM = "yorickvp/llava-13b"
+MODELO_IMAGEM = "meta/llama-3.2-11b-vision-instruct"
 MODELO_TEXTO = "meta/llama-3.1-8b-instruct"
 
 TIPOS_IMAGEM_PERMITIDOS = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"}
@@ -117,7 +117,7 @@ def chamar_modelo(data_uri: str, prompt: str) -> str:
     client = replicate.Client(api_token=REPLICATE_API_TOKEN)
     saida = client.run(
         MODELO_IMAGEM,
-        input={"image": data_uri, "prompt": prompt, "max_new_tokens": 1024, "temperature": 0.2},
+        input={"image": data_uri, "prompt": prompt, "max_tokens": 1024, "temperature": 0.2},
     )
     return "".join(saida).strip()
 
@@ -127,7 +127,7 @@ def chamar_modelo_url(url_imagem: str, prompt: str) -> str:
     client = replicate.Client(api_token=REPLICATE_API_TOKEN)
     saida = client.run(
         MODELO_IMAGEM,
-        input={"image": url_imagem, "prompt": prompt, "max_new_tokens": 1024, "temperature": 0.2},
+        input={"image": url_imagem, "prompt": prompt, "max_tokens": 1024, "temperature": 0.2},
     )
     return "".join(saida).strip()
 
@@ -306,7 +306,8 @@ async def descrever_imagem_url(
         raise HTTPException(status_code=422, detail="O parâmetro 'quantidade' deve ser entre 1 e 3.")
 
     contexto_pessoas = _contexto_pessoas(usuario.id, db)
-    prompt_final = PROMPT_DESCRICAO + contexto_pessoas
+    estilo = _estilo_usuario(usuario)
+    prompt_final = PROMPT_DESCRICAO + contexto_pessoas + estilo
 
     try:
         descricoes = [chamar_modelo_url(body.url, prompt_final) for _ in range(body.quantidade)]
@@ -376,10 +377,22 @@ async def descrever_imagens_pagina(
     vistas: set[str] = set()
     urls_imagens: list[str] = []
 
-    def adicionar(u: str):
+    EXTS_IMAGEM = frozenset([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"])
+
+    def _tem_extensao_imagem(url: str) -> bool:
+        path = urlparse(url).path.lower()
+        return any(path.split("?")[0].endswith(e) for e in EXTS_IMAGEM)
+
+    def adicionar(u: str, exigir_extensao: bool = False):
         if not u or u.startswith("data:"):
             return
         absoluta = urljoin(url_base, u.strip())
+        path = urlparse(absoluta).path
+        # Rejeita caminhos de diretório (terminam com /)
+        if not path or path.endswith("/"):
+            return
+        if exigir_extensao and not _tem_extensao_imagem(absoluta):
+            return
         if absoluta not in vistas:
             vistas.add(absoluta)
             urls_imagens.append(absoluta)
@@ -404,21 +417,27 @@ async def descrever_imagens_pagina(
         for attr in ATTRS_SRC:
             val = img.get(attr)
             if val:
-                adicionar(val)
+                # <img> src exige extensão — evita URLs de diretório/perfil
+                adicionar(val, exigir_extensao=True)
                 break
         # srcset pode ter várias URLs — pega a de maior resolução
         srcset = img.get("srcset") or img.get("data-srcset")
         if srcset:
             partes = [p.strip().split()[0] for p in srcset.split(",") if p.strip()]
             if partes:
-                adicionar(partes[-1])
+                adicionar(partes[-1], exigir_extensao=True)
 
     # Links <a> que apontam diretamente para imagens
-    EXTS_IMAGEM = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp")
     for a in soup.find_all("a", href=True):
         href = a["href"].lower()
-        if any(href.endswith(e) for e in EXTS_IMAGEM):
+        if any(href.split("?")[0].endswith(e) for e in EXTS_IMAGEM):
             adicionar(a["href"])
+
+    # Padrão de URL de imagem para uso em JSON/HTML — aceita query params após a extensão
+    _RE_IMG_URL = re.compile(
+        r'https?://[^\s\'"<>]+\.(?:jpg|jpeg|png|webp|gif|avif|bmp)(?:[?#][^\s\'"<>]*)?',
+        re.IGNORECASE,
+    )
 
     # __NEXT_DATA__ — Next.js embute todos os dados da página como JSON
     next_data_tag = soup.find("script", id="__NEXT_DATA__")
@@ -426,8 +445,7 @@ async def descrever_imagens_pagina(
         try:
             next_data = json.loads(next_data_tag.string)
             next_str = json.dumps(next_data)
-            # extrai todas as URLs que parecem fotos dentro do JSON
-            for url_json in re.findall(r'https?://[^\s\'"<>]+\.(?:jpg|jpeg|png|webp|gif|avif)', next_str, re.IGNORECASE):
+            for url_json in _RE_IMG_URL.findall(next_str):
                 adicionar(url_json)
         except Exception:
             pass
@@ -437,13 +455,13 @@ async def descrever_imagens_pagina(
         try:
             dados_ld = json.loads(script.string or "")
             ld_str = json.dumps(dados_ld)
-            for url_ld in re.findall(r'https?://[^\s\'"<>]+\.(?:jpg|jpeg|png|webp|gif|avif)', ld_str, re.IGNORECASE):
+            for url_ld in _RE_IMG_URL.findall(ld_str):
                 adicionar(url_ld)
         except Exception:
             pass
 
     # Regex geral em todo o HTML — captura URLs de imagem embutidas em JS inline
-    for url_inline in re.findall(r'https?://[^\s\'"<>]+\.(?:jpg|jpeg|png|webp|avif)', html, re.IGNORECASE):
+    for url_inline in _RE_IMG_URL.findall(html):
         adicionar(url_inline)
 
     # Remove ruído óbvio e SVGs (PIL não processa SVG)

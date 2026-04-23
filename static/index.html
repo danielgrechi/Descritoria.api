@@ -537,14 +537,13 @@
     form.append('arquivo', input.files[0]);
 
     try {
-      const r = await fetch(`${API}/documentos/ler`, {
+      const r = await fetchComAuth(`${API}/documentos/ler`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: form
       });
       const d = await r.json();
       if (r.ok) {
-        ultimoTextoDocumento = d.texto || d.conteudo || JSON.stringify(d);
+        ultimoTextoDocumento = d.texto || d.transcricao || JSON.stringify(d);
         res.textContent = ultimoTextoDocumento;
         res.style.display = 'block';
         document.getElementById('btnOuvirDocumento').style.display = 'block';
@@ -760,7 +759,8 @@
         ultimoTextoImagem = d.descricoes[0];
         res.innerHTML = `<div class="resultado">${d.descricoes[0]}</div>`;
         st.textContent = '';
-        lerEmVoz(d.descricoes[0]);
+        mostrarPainelPosDescricao();
+        lerEmVoz('imagem');
       } else {
         st.innerHTML = `<span class="erro">${d.detail || 'Erro ao descrever.'}</span>`;
       }
@@ -785,11 +785,14 @@
       const d = await r.json();
       if (r.ok && d.imagens && d.imagens.length > 0) {
         st.textContent = `${d.total_descritas} imagem(ns) descrita(s) de ${d.total_imagens_encontradas} encontrada(s).`;
+        window._descsPagina = d.imagens.map(img => img.descricao);
+        ultimaDescricaoId = d.imagens[0].id;
+        ultimoTextoImagem = d.imagens[0].descricao;
         res.innerHTML = d.imagens.map((img, i) => `
           <div class="resultado" style="margin-bottom:10px;">
             <strong>Imagem ${i + 1}</strong><br>
-            ${img.descricao}<br><br>
-            <button class="btn-laranja" onclick="lerEmVoz(\`${img.descricao.replace(/`/g, "'")}\`)">🔊 Ouvir</button>
+            ${img.descricao.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}<br><br>
+            <button class="btn-laranja" onclick="lerEmVozPagina(${i})">🔊 Ouvir</button>
           </div>`).join('');
       } else {
         st.innerHTML = `<span class="erro">${d.detail || 'Não foi possível descrever.'}</span>`;
@@ -897,6 +900,10 @@
   }
 
   // ── Voz ───────────────────────────────────────────────────────────────────
+
+  function lerEmVozPagina(i) {
+    if (window._descsPagina && window._descsPagina[i]) lerEmVoz(window._descsPagina[i]);
+  }
 
   function lerEmVoz(origem) {
     let texto = '';

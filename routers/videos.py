@@ -13,7 +13,7 @@ from database import get_db
 router = APIRouter(prefix="/videos", tags=["Vídeos"])
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
-MODELO_IMAGEM = "yorickvp/llava-13b"
+MODELO_IMAGEM = "meta/llama-3.2-11b-vision-instruct"
 
 PROMPT_VIDEO = (
     "Você é um assistente de acessibilidade visual para pessoas cegas. "
