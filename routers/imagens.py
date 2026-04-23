@@ -37,17 +37,19 @@ FORMATO_PARA_MIME = {
 
 PROMPT_DESCRICAO = (
     "You are helping a blind person in Brazil understand this image.\n"
-    "Describe ONLY what is literally visible. Never invent, guess, "
-    "or infer anything not directly shown in the image.\n"
-    "Do not say 'probably', 'seems', 'appears' or 'likely'.\n\n"
+    "CRITICAL RULES:\n"
+    "1. Describe ONLY what is literally visible inside the frame. "
+    "If a body part is not visible, do not mention it.\n"
+    "2. Never guess, infer or complete what might exist outside the frame.\n"
+    "3. Never say 'probably', 'seems', 'appears' or 'likely'.\n"
+    "4. If you cannot see someone's face or hair, do not describe face or hair.\n\n"
     "Respond entirely in Brazilian Portuguese (zero English words).\n\n"
-    "Describe in natural paragraphs:\n"
-    "- The setting and its colors\n"
-    "- Each person visible: exact skin color, hair color and length, "
-    "eye color, body build, exact clothing or nudity (if nude: "
-    "describe visible anatomy precisely — breasts, genitals, "
-    "buttocks — using correct anatomical terms), exact body position\n"
-    "- All visible objects with colors and positions"
+    "Describe exactly and only what is visible:\n"
+    "- Background/surface: exact colors and materials\n"
+    "- Body parts visible: describe each one precisely with color, size, shape\n"
+    "- Clothing visible: color, type\n"
+    "- Any other visible elements\n\n"
+    "Do NOT describe anything outside the image frame."
 )
 
 PROMPT_PERGUNTA_TEMPLATE = (
