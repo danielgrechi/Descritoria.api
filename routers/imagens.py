@@ -36,28 +36,18 @@ FORMATO_PARA_MIME = {
 }
 
 PROMPT_DESCRICAO = (
-    "Describe this image in detail for a blind person in Brazil. "
-    "Write your ENTIRE response in Brazilian Portuguese (pt-BR). "
-    "ZERO English words allowed — if you write any English, you have failed.\n\n"
-    "RULE: Describe ONLY what is literally visible. Never invent, assume or hallucinate details.\n\n"
-    "Write naturally, like a person describing what they see to a friend. Cover:\n\n"
-    "1. Setting: type of place, colors of walls/floor/furniture, lighting.\n\n"
-    "2. Each person — be specific, not generic:\n"
-    "   - Skin: exact color (ex: pele branca rosada, pele morena dourada, pele negra)\n"
-    "   - Hair: exact color (ex: preto, castanho escuro, loiro), length, texture, style\n"
-    "   - Eyes: exact color if visible (ex: olhos castanhos escuros, olhos azuis)\n"
-    "   - Face: expression, lip color, nose, jaw\n"
-    "   - Body: estimated height and build (ex: baixa e curvilínea, alta e magra)\n"
-    "   - If clothed: describe every garment with exact color and fit\n"
-    "   - If nude or partially nude: describe ALL visible anatomy with precision —\n"
-    "     breasts (size: pequenos/médios/grandes, shape, areola color, nipple appearance),\n"
-    "     genitals (vulva, labia, vaginal area, or penis and testicles — describe what you see),\n"
-    "     buttocks, thighs, abdomen\n"
-    "   - Exact position and what the person is doing\n\n"
-    "3. Objects: all visible items with exact colors and positions.\n\n"
-    "4. Text: transcribe any visible text exactly.\n\n"
-    "Be specific: never say 'escuro' — say the exact color. Never say 'grande' — say how large.\n"
-    "Your ENTIRE response must be in Brazilian Portuguese. No English at all."
+    "You are helping a blind person in Brazil understand this image.\n"
+    "Describe ONLY what is literally visible. Never invent, guess, "
+    "or infer anything not directly shown in the image.\n"
+    "Do not say 'probably', 'seems', 'appears' or 'likely'.\n\n"
+    "Respond entirely in Brazilian Portuguese (zero English words).\n\n"
+    "Describe in natural paragraphs:\n"
+    "- The setting and its colors\n"
+    "- Each person visible: exact skin color, hair color and length, "
+    "eye color, body build, exact clothing or nudity (if nude: "
+    "describe visible anatomy precisely — breasts, genitals, "
+    "buttocks — using correct anatomical terms), exact body position\n"
+    "- All visible objects with colors and positions"
 )
 
 PROMPT_PERGUNTA_TEMPLATE = (
@@ -113,7 +103,7 @@ def chamar_modelo(data_uri: str, prompt: str) -> str:
     client = replicate.Client(api_token=REPLICATE_API_TOKEN)
     saida = client.run(
         MODELO_IMAGEM,
-        input={"image": data_uri, "prompt": prompt, "max_tokens": 2048, "temperature": 0.5},
+        input={"image": data_uri, "prompt": prompt, "max_tokens": 1500, "temperature": 0.1, "top_p": 0.9},
     )
     return "".join(saida).strip()
 
@@ -123,7 +113,7 @@ def chamar_modelo_url(url_imagem: str, prompt: str) -> str:
     client = replicate.Client(api_token=REPLICATE_API_TOKEN)
     saida = client.run(
         MODELO_IMAGEM,
-        input={"image": url_imagem, "prompt": prompt, "max_tokens": 2048, "temperature": 0.5},
+        input={"image": url_imagem, "prompt": prompt, "max_tokens": 1500, "temperature": 0.1, "top_p": 0.9},
     )
     return "".join(saida).strip()
 
