@@ -13,7 +13,29 @@ from database import get_db
 router = APIRouter(prefix="/videos", tags=["Vídeos"])
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
-MODELO_IMAGEM = "yorickvp/llava-13b:e8029643d071db6a1f6759379ea5a225a8d0a623"
+
+import httpx as _httpx
+
+
+def _resolver_modelo(nome: str) -> str:
+    if not REPLICATE_API_TOKEN:
+        return nome
+    try:
+        resp = _httpx.get(
+            f"https://api.replicate.com/v1/models/{nome}/versions",
+            headers={"Authorization": f"Bearer {REPLICATE_API_TOKEN}"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            results = resp.json().get("results", [])
+            if results:
+                return f"{nome}:{results[0]['id']}"
+    except Exception:
+        pass
+    return nome
+
+
+MODELO_IMAGEM = _resolver_modelo("yorickvp/llava-13b")
 
 PROMPT_VIDEO = (
     "Você é um assistente de acessibilidade visual para pessoas cegas. "
