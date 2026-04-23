@@ -23,32 +23,8 @@ from database import get_db
 router = APIRouter(prefix="/imagens", tags=["Imagens"])
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
+MODELO_IMAGEM = "meta/llama-3.2-11b-vision-instruct"
 MODELO_TEXTO = "meta/llama-3.1-8b-instruct"
-
-
-def _resolver_modelo(nome: str) -> str:
-    """Consulta o Replicate e retorna nome:hash_mais_recente do modelo."""
-    if not REPLICATE_API_TOKEN:
-        return nome
-    try:
-        resp = httpx.get(
-            f"https://api.replicate.com/v1/models/{nome}/versions",
-            headers={"Authorization": f"Bearer {REPLICATE_API_TOKEN}"},
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            results = resp.json().get("results", [])
-            if results:
-                versao = results[0]["id"]
-                print(f"[Descritoria] Modelo: {nome}:{versao}")
-                return f"{nome}:{versao}"
-        print(f"[Descritoria] Aviso: API retornou {resp.status_code} para {nome}")
-    except Exception as e:
-        print(f"[Descritoria] Aviso: falha ao detectar versão do modelo: {e}")
-    return nome
-
-
-MODELO_IMAGEM = _resolver_modelo("yorickvp/llava-13b")
 
 TIPOS_IMAGEM_PERMITIDOS = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"}
 FORMATO_PARA_MIME = {

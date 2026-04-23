@@ -15,29 +15,7 @@ from database import get_db
 router = APIRouter(prefix="/documentos", tags=["Documentos"])
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
-
-import httpx as _httpx
-
-
-def _resolver_modelo(nome: str) -> str:
-    if not REPLICATE_API_TOKEN:
-        return nome
-    try:
-        resp = _httpx.get(
-            f"https://api.replicate.com/v1/models/{nome}/versions",
-            headers={"Authorization": f"Bearer {REPLICATE_API_TOKEN}"},
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            results = resp.json().get("results", [])
-            if results:
-                return f"{nome}:{results[0]['id']}"
-    except Exception:
-        pass
-    return nome
-
-
-MODELO_DOCUMENTO = _resolver_modelo("yorickvp/llava-13b")
+MODELO_DOCUMENTO = "meta/llama-3.2-11b-vision-instruct"
 
 TIPOS_PERMITIDOS = {
     "image/jpeg", "image/png", "image/webp", "image/bmp", "image/tiff",

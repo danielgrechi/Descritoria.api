@@ -1,5 +1,6 @@
 import os
 
+import httpx
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -62,6 +63,32 @@ app.include_router(skills.router)
 app.include_router(usuario.router)
 app.include_router(feedback.router)
 app.include_router(pessoas.router)
+
+
+# ── Detecção automática do modelo sem censura ─────────────────────────────────
+
+@app.on_event("startup")
+async def detectar_modelo_sem_censura():
+    """Tenta usar yorickvp/llava-13b (sem censura). Se não acessível, mantém o Meta."""
+    modelo_alvo = "yorickvp/llava-13b"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"https://api.replicate.com/v1/models/{modelo_alvo}/versions",
+                headers={"Authorization": f"Bearer {REPLICATE_API_TOKEN}"},
+            )
+        if resp.status_code == 200:
+            results = resp.json().get("results", [])
+            if results:
+                versao = f"{modelo_alvo}:{results[0]['id']}"
+                imagens.MODELO_IMAGEM = versao
+                videos.MODELO_IMAGEM = versao
+                documentos.MODELO_DOCUMENTO = versao
+                print(f"[Descritoria] ✓ Modelo sem censura: {versao}")
+                return
+        print(f"[Descritoria] ✗ {modelo_alvo} retornou {resp.status_code} — usando modelo Meta")
+    except Exception as e:
+        print(f"[Descritoria] ✗ Erro ao acessar {modelo_alvo}: {e} — usando modelo Meta")
 
 
 # ── Diagnóstico de modelo ─────────────────────────────────────────────────────
