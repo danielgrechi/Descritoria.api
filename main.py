@@ -4,7 +4,7 @@ import httpx
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
@@ -93,13 +93,31 @@ async def detectar_modelo_sem_censura():
 
 # ── Diagnóstico de modelo ─────────────────────────────────────────────────────
 
-@app.get("/modelo", summary="Modelo de IA ativo", tags=["Sistema"])
+_STATUS_MODELO: dict = {"status": "aguardando", "modelo": "desconhecido", "codigo": 0}
+
+
+@app.get("/modelo", response_class=HTMLResponse, include_in_schema=False)
 def modelo_ativo():
-    return {
-        "modelo_imagem": imagens.MODELO_IMAGEM,
-        "modelo_texto": imagens.MODELO_TEXTO,
-        "modelo_documento": documentos.MODELO_DOCUMENTO,
-    }
+    modelo = imagens.MODELO_IMAGEM
+    sem_censura = "llava" in modelo
+    if sem_censura:
+        titulo = "Modelo sem censura ativo"
+        descricao = f"O modelo LLaVA está ativo e funcionando. Descrições completas habilitadas. Modelo: {modelo}"
+        cor = "green"
+    else:
+        titulo = "Atenção: modelo com censura ativo"
+        descricao = f"O LLaVA não está acessível. Usando modelo Meta com restrições. Modelo: {modelo}"
+        cor = "red"
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>Status do Modelo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="font-family:sans-serif;padding:2rem;background:#111;color:#fff;">
+<h1 style="color:{cor};">{titulo}</h1>
+<p style="font-size:1.2rem;">{descricao}</p>
+<p><a href="/" style="color:#4af;">Voltar ao app</a></p>
+</body></html>""")
 
 
 # ── Autenticação ──────────────────────────────────────────────────────────────
