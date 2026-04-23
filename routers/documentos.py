@@ -15,7 +15,7 @@ from database import get_db
 router = APIRouter(prefix="/documentos", tags=["Documentos"])
 
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
-MODELO_DOCUMENTO = "yorickvp/llava-13b:80278a25b21ef6e09f868a39426fef30f8b26f5e"
+MODELO_DOCUMENTO = "yorickvp/llava-13b:e8029643d071db6a1f6759379ea5a225a8d0a623"
 
 TIPOS_PERMITIDOS = {
     "image/jpeg", "image/png", "image/webp", "image/bmp", "image/tiff",
