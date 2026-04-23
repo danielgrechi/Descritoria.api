@@ -64,6 +64,17 @@ app.include_router(feedback.router)
 app.include_router(pessoas.router)
 
 
+# ── Diagnóstico de modelo ─────────────────────────────────────────────────────
+
+@app.get("/modelo", summary="Modelo de IA ativo", tags=["Sistema"])
+def modelo_ativo():
+    return {
+        "modelo_imagem": imagens.MODELO_IMAGEM,
+        "modelo_texto": imagens.MODELO_TEXTO,
+        "modelo_documento": documentos.MODELO_DOCUMENTO,
+    }
+
+
 # ── Autenticação ──────────────────────────────────────────────────────────────
 
 @app.post(
