@@ -17,10 +17,7 @@ Base.metadata.create_all(bind=engine)
 
 GROK_API_KEY = os.environ.get("GROK_API_KEY")
 if not GROK_API_KEY:
-    raise ValueError(
-        "A variável de ambiente GROK_API_KEY não está definida. "
-        "Defina-a antes de iniciar o servidor."
-    )
+    print("[Descritoria] AVISO: GROK_API_KEY não definida. Descrições de imagem não funcionarão.")
 
 app = FastAPI(
     title="Descritoria API",
