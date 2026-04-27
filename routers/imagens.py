@@ -23,7 +23,7 @@ from database import get_db
 router = APIRouter(prefix="/imagens", tags=["Imagens"])
 
 GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
-MODELO_IMAGEM = "grok-2-vision-latest"
+MODELO_IMAGEM = "grok-4"
 MODELO_TEXTO = "grok-3-mini"
 
 TIPOS_IMAGEM_PERMITIDOS = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"}
