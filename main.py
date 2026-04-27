@@ -11,13 +11,17 @@ import models
 import schemas
 from auth import criar_token, hash_senha, verificar_senha
 from database import Base, engine, get_db
-from routers import documentos, estabelecimentos, feedback, imagens, internet, pessoas, skills, usuario, videos
+from routers import documentos, estabelecimentos, feedback, imagens, internet, pessoas, skills, tts, usuario, videos
 
 Base.metadata.create_all(bind=engine)
 
 GROK_API_KEY = os.environ.get("GROK_API_KEY")
 if not GROK_API_KEY:
     print("[Descritoria] AVISO: GROK_API_KEY não definida. Descrições de imagem não funcionarão.")
+
+GROK_TTS_KEY = os.environ.get("GROK_TTS_KEY", GROK_API_KEY)
+if not GROK_TTS_KEY:
+    print("[Descritoria] AVISO: GROK_TTS_KEY não definida. Voz Grok TTS não funcionará.")
 
 app = FastAPI(
     title="Descritoria API",
@@ -58,6 +62,7 @@ app.include_router(skills.router)
 app.include_router(usuario.router)
 app.include_router(feedback.router)
 app.include_router(pessoas.router)
+app.include_router(tts.router)
 
 
 # ── Diagnóstico de modelo ─────────────────────────────────────────────────────

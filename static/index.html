@@ -934,7 +934,9 @@
     if (window._descsPagina && window._descsPagina[i]) lerEmVoz(window._descsPagina[i]);
   }
 
-  function lerEmVoz(origem) {
+  let _audioAtual = null;
+
+  async function lerEmVoz(origem) {
     let texto = '';
     if (origem === 'imagem') texto = ultimoTextoImagem;
     else if (origem === 'pergunta') texto = ultimoTextoPergunta;
@@ -943,14 +945,31 @@
 
     if (!texto) return;
     pararVoz();
-    const utt = new SpeechSynthesisUtterance(texto);
-    utt.lang = 'pt-BR';
-    utt.rate = 0.95;
-    speechSynthesis.speak(utt);
+
+    try {
+      const resp = await fetchComAuth('/tts/falar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto }),
+      });
+      if (!resp.ok) throw new Error('TTS indisponível');
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      _audioAtual = new Audio(url);
+      _audioAtual.play();
+      _audioAtual.onended = () => { URL.revokeObjectURL(url); _audioAtual = null; };
+    } catch {
+      // fallback para voz do sistema
+      const utt = new SpeechSynthesisUtterance(texto);
+      utt.lang = 'pt-BR';
+      utt.rate = 0.95;
+      speechSynthesis.speak(utt);
+    }
   }
 
   function pararVoz() {
     speechSynthesis.cancel();
+    if (_audioAtual) { _audioAtual.pause(); _audioAtual = null; }
   }
 
   // ── Câmera ao Vivo ────────────────────────────────────────────────────────
