@@ -37,38 +37,54 @@ def _pcm16_para_wav(pcm: bytes, rate: int = 24000) -> bytes:
 
 
 async def _tts_via_realtime(texto: str) -> bytes:
-    uri = REALTIME_URL
-    headers = {"Authorization": f"Bearer {GROK_TTS_KEY}"}
+    headers = [
+        ("Authorization", f"Bearer {GROK_TTS_KEY}"),
+    ]
 
     chunks: list[bytes] = []
-    async with websockets.connect(uri, additional_headers=headers) as ws:
-        await ws.send(json.dumps({
-            "type": "session.update",
-            "session": {
-                "voice": VOZ_TTS,
-                "modalities": ["audio", "text"],
-                "instructions": "Leia o texto exatamente como fornecido.",
-            },
-        }))
-        await ws.send(json.dumps({
-            "type": "conversation.item.create",
-            "item": {
-                "type": "message",
-                "role": "user",
-                "content": [{"type": "input_text", "text": texto}],
-            },
-        }))
-        await ws.send(json.dumps({"type": "response.create"}))
+    try:
+        async with websockets.connect(REALTIME_URL, additional_headers=headers) as ws:
+            await ws.send(json.dumps({
+                "type": "session.update",
+                "session": {
+                    "voice": VOZ_TTS,
+                    "modalities": ["audio", "text"],
+                    "instructions": "Leia o texto exatamente como fornecido.",
+                },
+            }))
+            await ws.send(json.dumps({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": texto}],
+                },
+            }))
+            await ws.send(json.dumps({"type": "response.create"}))
 
-        async for raw in ws:
-            event = json.loads(raw)
-            etype = event.get("type", "")
-            if etype == "response.audio.delta":
-                chunks.append(base64.b64decode(event.get("delta", "")))
-            elif etype in ("response.done", "error"):
-                break
+            async for raw in ws:
+                if isinstance(raw, bytes):
+                    chunks.append(raw)
+                    continue
+                event = json.loads(raw)
+                etype = event.get("type", "")
+                print(f"[TTS] evento: {etype}")
+                if etype == "response.audio.delta":
+                    delta = event.get("delta", "")
+                    if delta:
+                        chunks.append(base64.b64decode(delta))
+                elif etype in ("response.done", "error"):
+                    if etype == "error":
+                        print(f"[TTS] erro da API: {event}")
+                    break
+    except Exception as e:
+        print(f"[TTS] falha na conexão WebSocket: {type(e).__name__}: {e}")
+        raise
 
-    return _pcm16_para_wav(b"".join(chunks))
+    raw_audio = b"".join(chunks)
+    if not raw_audio:
+        raise RuntimeError("API não retornou áudio.")
+    return _pcm16_para_wav(raw_audio)
 
 
 @router.post("/falar", summary="Converte texto em fala (xAI Realtime Voice)")
@@ -84,10 +100,8 @@ async def falar_texto(
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="Timeout no TTS.")
     except Exception as e:
+        print(f"[TTS] erro final: {e}")
         raise HTTPException(status_code=502, detail=f"Erro no TTS: {str(e)}")
-
-    if len(audio) < 44:
-        raise HTTPException(status_code=502, detail="Sem áudio retornado pela API.")
 
     return StreamingResponse(
         io.BytesIO(audio),
