@@ -947,7 +947,7 @@
     pararVoz();
 
     const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 3000);
+    const tid = setTimeout(() => controller.abort(), 8000);
 
     try {
       const resp = await fetchComAuth('/tts/falar', {
