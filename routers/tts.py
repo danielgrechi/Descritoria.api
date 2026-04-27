@@ -5,7 +5,6 @@ import json
 import os
 import struct
 
-import websockets
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -37,53 +36,56 @@ def _pcm16_para_wav(pcm: bytes, rate: int = 24000) -> bytes:
 
 
 async def _tts_via_realtime(texto: str) -> bytes:
-    headers = [
-        ("Authorization", f"Bearer {GROK_TTS_KEY}"),
-    ]
+    import websockets
 
+    auth_header = [("Authorization", f"Bearer {GROK_TTS_KEY}")]
     chunks: list[bytes] = []
-    try:
-        async with websockets.connect(REALTIME_URL, additional_headers=headers) as ws:
-            await ws.send(json.dumps({
-                "type": "session.update",
-                "session": {
-                    "voice": VOZ_TTS,
-                    "modalities": ["audio", "text"],
-                    "instructions": "Leia o texto exatamente como fornecido.",
-                },
-            }))
-            await ws.send(json.dumps({
-                "type": "conversation.item.create",
-                "item": {
-                    "type": "message",
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": texto}],
-                },
-            }))
-            await ws.send(json.dumps({"type": "response.create"}))
 
-            async for raw in ws:
-                if isinstance(raw, bytes):
-                    chunks.append(raw)
-                    continue
-                event = json.loads(raw)
-                etype = event.get("type", "")
-                print(f"[TTS] evento: {etype}")
-                if etype == "response.audio.delta":
-                    delta = event.get("delta", "")
-                    if delta:
-                        chunks.append(base64.b64decode(delta))
-                elif etype in ("response.done", "error"):
-                    if etype == "error":
-                        print(f"[TTS] erro da API: {event}")
-                    break
-    except Exception as e:
-        print(f"[TTS] falha na conexão WebSocket: {type(e).__name__}: {e}")
-        raise
+    # Tenta new API (websockets 12+) com additional_headers
+    try:
+        ctx = websockets.connect(REALTIME_URL, additional_headers=auth_header)
+    except TypeError:
+        # Fallback para legacy API com extra_headers
+        ctx = websockets.connect(REALTIME_URL, extra_headers=auth_header)
+
+    async with ctx as ws:
+        await ws.send(json.dumps({
+            "type": "session.update",
+            "session": {
+                "voice": VOZ_TTS,
+                "modalities": ["audio", "text"],
+                "instructions": "Leia o texto exatamente como fornecido.",
+            },
+        }))
+        await ws.send(json.dumps({
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": texto}],
+            },
+        }))
+        await ws.send(json.dumps({"type": "response.create"}))
+
+        async for raw in ws:
+            if isinstance(raw, bytes):
+                chunks.append(raw)
+                continue
+            event = json.loads(raw)
+            etype = event.get("type", "")
+            print(f"[TTS] {etype}", flush=True)
+            if etype == "response.audio.delta":
+                delta = event.get("delta", "")
+                if delta:
+                    chunks.append(base64.b64decode(delta))
+            elif etype in ("response.done", "error"):
+                if etype == "error":
+                    print(f"[TTS] ERRO API: {event}", flush=True)
+                break
 
     raw_audio = b"".join(chunks)
     if not raw_audio:
-        raise RuntimeError("API não retornou áudio.")
+        raise RuntimeError("API não retornou áudio")
     return _pcm16_para_wav(raw_audio)
 
 
@@ -100,7 +102,7 @@ async def falar_texto(
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="Timeout no TTS.")
     except Exception as e:
-        print(f"[TTS] erro final: {e}")
+        print(f"[TTS] ERRO FINAL: {type(e).__name__}: {e}", flush=True)
         raise HTTPException(status_code=502, detail=f"Erro no TTS: {str(e)}")
 
     return StreamingResponse(

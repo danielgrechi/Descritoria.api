@@ -946,9 +946,15 @@
     if (!texto) return;
     pararVoz();
 
+    // Inicia voz do sistema IMEDIATAMENTE (iOS exige contexto de gesto do usuário)
+    const utt = new SpeechSynthesisUtterance(texto);
+    utt.lang = 'pt-BR';
+    utt.rate = 0.95;
+    speechSynthesis.speak(utt);
+
+    // Tenta Grok TTS em paralelo — se chegar, troca pela voz da IA
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 8000);
-
     try {
       const resp = await fetchComAuth('/tts/falar', {
         method: 'POST',
@@ -957,19 +963,16 @@
         signal: controller.signal,
       });
       clearTimeout(tid);
-      if (!resp.ok) throw new Error('TTS indisponível');
+      if (!resp.ok) return; // voz do sistema já tocando
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
+      speechSynthesis.cancel(); // para voz do sistema
       _audioAtual = new Audio(url);
       _audioAtual.play();
       _audioAtual.onended = () => { URL.revokeObjectURL(url); _audioAtual = null; };
     } catch {
       clearTimeout(tid);
-      // fallback para voz do sistema
-      const utt = new SpeechSynthesisUtterance(texto);
-      utt.lang = 'pt-BR';
-      utt.rate = 0.95;
-      speechSynthesis.speak(utt);
+      // voz do sistema continua tocando normalmente
     }
   }
 
