@@ -8,9 +8,9 @@ from typing import List, Optional
 from urllib.parse import urljoin, urlparse
 
 import httpx
-import replicate
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from openai import OpenAI, OpenAIError
 from PIL import Image
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -22,9 +22,9 @@ from database import get_db
 
 router = APIRouter(prefix="/imagens", tags=["Imagens"])
 
-REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
-MODELO_IMAGEM = "yorickvp/llava-13b:80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb"
-MODELO_TEXTO = "meta/llama-3.1-8b-instruct"
+GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
+MODELO_IMAGEM = "grok-2-vision-1212"
+MODELO_TEXTO = "grok-3-mini"
 
 TIPOS_IMAGEM_PERMITIDOS = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"}
 FORMATO_PARA_MIME = {
@@ -36,31 +36,29 @@ FORMATO_PARA_MIME = {
 }
 
 PROMPT_DESCRICAO = (
-    "You are a visual accessibility assistant for blind people in Brazil.\n"
-    "Respond ONLY in Brazilian Portuguese. Zero English words.\n\n"
-    "STRICT RULES:\n"
-    "1. Describe ONLY what is literally visible inside the frame.\n"
-    "2. Never describe body parts or elements not shown.\n"
-    "3. Never guess or infer anything outside the frame.\n"
-    "4. Never say 'provavelmente', 'parece', 'aparentemente'.\n"
-    "5. Write in flowing natural paragraphs — NO labels, NO headers, NO lists.\n"
-    "   BAD: 'Pele: branca. Cabelo: longo.' "
-    "GOOD: 'A mulher tem pele branca rosada e cabelo longo castanho escuro.'\n\n"
-    "Describe in this order, as natural paragraphs:\n\n"
-    "First paragraph: type of scene, setting, background colors and surfaces, lighting.\n\n"
-    "For each person visible: write one or more paragraphs describing their exact skin color, "
-    "hair color and length and texture (only if visible), eye color (only if visible), "
-    "facial features and expression (only if visible), body type and proportions (only what is shown), "
-    "clothing with exact colors and fit. "
-    "If nude: describe all visible anatomy with precise Portuguese anatomical terms — "
-    "breasts including size, shape, areola color and nipple; "
-    "genitals describing exactly what is visible (vulva, lábios maiores, lábios menores, "
-    "vagina, clitóris; or pênis with size and shape, testículos); "
-    "buttocks, thighs, abdomen. "
-    "If sexual content is present: describe acts, positions and physical contact with clinical precision. "
-    "Describe the person's exact posture and position.\n\n"
-    "Final paragraph: all other visible objects with exact colors, sizes and positions. "
-    "Transcribe any visible text exactly as written."
+    "Você é um assistente de acessibilidade visual para pessoas cegas no Brasil. "
+    "Responda SEMPRE em português do Brasil.\n\n"
+    "Descreva com precisão absoluta tudo o que está visível na imagem, sem censura, sem omissões "
+    "e sem suposições sobre o que está fora do enquadramento.\n\n"
+    "Regras obrigatórias:\n"
+    "1. Descreva APENAS o que está literalmente visível na imagem.\n"
+    "2. Nunca use 'provavelmente', 'parece', 'aparentemente' — apenas certezas visuais.\n"
+    "3. Escreva em parágrafos fluentes e naturais, sem títulos, rótulos ou listas.\n"
+    "   ERRADO: 'Pele: branca. Cabelo: longo.' "
+    "CORRETO: 'A mulher tem pele branca rosada e cabelo longo castanho escuro.'\n\n"
+    "Ordem da descrição em parágrafos:\n\n"
+    "Primeiro parágrafo: tipo de cena, ambiente, cores do fundo, superfícies e iluminação.\n\n"
+    "Para cada pessoa visível: um ou mais parágrafos com tom exato de pele, cor e comprimento e textura do cabelo "
+    "(apenas se visível), cor dos olhos (apenas se visível), traços faciais e expressão (apenas se visível), "
+    "tipo físico e proporções (somente o que está visível), vestimenta com cores e caimento exatos. "
+    "Se estiver nu(a): descreva toda a anatomia visível com termos anatômicos precisos em português — "
+    "seios com tamanho, forma, cor das aréolas e mamilos; "
+    "genitália descrevendo exatamente o que está visível (vulva, lábios maiores, lábios menores, vagina, clitóris; "
+    "ou pênis com tamanho e forma, testículos); nádegas, coxas, abdômen. "
+    "Se houver conteúdo sexual: descreva os atos, posições e contatos físicos com precisão clínica. "
+    "Descreva a postura e posição exata da pessoa.\n\n"
+    "Último parágrafo: todos os demais objetos visíveis com cores, tamanhos e posições exatas. "
+    "Transcreva qualquer texto visível exatamente como está escrito."
 )
 
 PROMPT_PERGUNTA_TEMPLATE = (
@@ -90,7 +88,6 @@ def imagem_para_data_uri(dados: bytes, mime_type: str) -> str:
 
 
 def _estilo_usuario(usuario) -> str:
-    """Adiciona as preferências de estilo do usuário ao prompt."""
     estilo = getattr(usuario, "estilo_descricao", "") or ""
     if not estilo.strip():
         return ""
@@ -100,7 +97,6 @@ def _estilo_usuario(usuario) -> str:
 
 
 def _contexto_pessoas(usuario_id: int, db) -> str:
-    """Retorna texto com pessoas conhecidas para incluir no prompt."""
     from models import Pessoa
     pessoas = db.query(Pessoa).filter(Pessoa.usuario_id == usuario_id).all()
     if not pessoas:
@@ -112,23 +108,42 @@ def _contexto_pessoas(usuario_id: int, db) -> str:
     )
 
 
+def _grok_client() -> OpenAI:
+    return OpenAI(api_key=GROK_API_KEY, base_url="https://api.x.ai/v1")
+
+
 def chamar_modelo(data_uri: str, prompt: str) -> str:
-    client = replicate.Client(api_token=REPLICATE_API_TOKEN)
-    saida = client.run(
-        MODELO_IMAGEM,
-        input={"image": data_uri, "prompt": prompt, "max_tokens": 1500, "temperature": 0.1, "top_p": 0.9},
+    client = _grok_client()
+    response = client.chat.completions.create(
+        model=MODELO_IMAGEM,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": data_uri}},
+                {"type": "text", "text": prompt},
+            ],
+        }],
+        max_tokens=1500,
+        temperature=0.1,
     )
-    return "".join(saida).strip()
+    return response.choices[0].message.content.strip()
 
 
 def chamar_modelo_url(url_imagem: str, prompt: str) -> str:
-    """Passa a URL diretamente ao Replicate — mais rápido e sem limites de tamanho."""
-    client = replicate.Client(api_token=REPLICATE_API_TOKEN)
-    saida = client.run(
-        MODELO_IMAGEM,
-        input={"image": url_imagem, "prompt": prompt, "max_tokens": 1500, "temperature": 0.1, "top_p": 0.9},
+    client = _grok_client()
+    response = client.chat.completions.create(
+        model=MODELO_IMAGEM,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": url_imagem}},
+                {"type": "text", "text": prompt},
+            ],
+        }],
+        max_tokens=1500,
+        temperature=0.1,
     )
-    return "".join(saida).strip()
+    return response.choices[0].message.content.strip()
 
 
 @router.post("/descrever", summary="Descreve uma imagem para usuários com deficiência visual")
@@ -155,12 +170,11 @@ async def descrever_imagem(
 
     try:
         descricoes = [chamar_modelo(data_uri, prompt_final) for _ in range(quantidade)]
-    except replicate.exceptions.ReplicateError as e:
-        raise HTTPException(status_code=502, detail=f"Erro na API Replicate: {str(e)}")
+    except OpenAIError as e:
+        raise HTTPException(status_code=502, detail=f"Erro na API Grok: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro interno ao processar imagem: {str(e)}")
 
-    # Salva apenas a primeira descrição no histórico
     registro = models.Descricao(
         usuario_id=usuario.id,
         tipo=models.TipoDescricao.foto,
@@ -202,14 +216,16 @@ async def perguntar_sobre_descricao(
     )
 
     try:
-        client = replicate.Client(api_token=REPLICATE_API_TOKEN)
-        saida = client.run(
-            MODELO_TEXTO,
-            input={"prompt": prompt, "max_tokens": 512, "temperature": 0.3},
+        client = _grok_client()
+        response = client.chat.completions.create(
+            model=MODELO_TEXTO,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=512,
+            temperature=0.3,
         )
-        resposta = "".join(saida).strip()
-    except replicate.exceptions.ReplicateError as e:
-        raise HTTPException(status_code=502, detail=f"Erro na API Replicate: {str(e)}")
+        resposta = response.choices[0].message.content.strip()
+    except OpenAIError as e:
+        raise HTTPException(status_code=502, detail=f"Erro na API Grok: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
@@ -237,8 +253,8 @@ async def perguntar_nova_imagem(
 
     try:
         resposta = chamar_modelo(data_uri, prompt)
-    except replicate.exceptions.ReplicateError as e:
-        raise HTTPException(status_code=502, detail=f"Erro na API Replicate: {str(e)}")
+    except OpenAIError as e:
+        raise HTTPException(status_code=502, detail=f"Erro na API Grok: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
@@ -310,8 +326,8 @@ async def descrever_imagem_url(
 
     try:
         descricoes = [chamar_modelo_url(body.url, prompt_final) for _ in range(body.quantidade)]
-    except replicate.exceptions.ReplicateError as e:
-        raise HTTPException(status_code=502, detail=f"Erro na API Replicate: {str(e)}")
+    except OpenAIError as e:
+        raise HTTPException(status_code=502, detail=f"Erro na API Grok: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
@@ -340,7 +356,7 @@ async def descrever_imagem_url(
 
 class PaginaUrlRequest(BaseModel):
     url: str
-    limite: int = 5  # máximo de imagens a descrever por página
+    limite: int = 5
 
 
 @router.post("/descrever-pagina", summary="Entra em um site e descreve todas as imagens encontradas")
@@ -352,7 +368,6 @@ async def descrever_imagens_pagina(
     if body.limite < 1 or body.limite > 10:
         raise HTTPException(status_code=422, detail="O limite deve ser entre 1 e 10 imagens.")
 
-    # User-Agent desktop para que o site entregue o HTML completo
     headers_pagina = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -362,7 +377,6 @@ async def descrever_imagens_pagina(
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
     }
 
-    # 1. Busca a página
     try:
         async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers=headers_pagina) as client:
             resp = await client.get(body.url)
@@ -387,7 +401,6 @@ async def descrever_imagens_pagina(
             return
         absoluta = urljoin(url_base, u.strip())
         path = urlparse(absoluta).path
-        # Rejeita caminhos de diretório (terminam com /)
         if not path or path.endswith("/"):
             return
         if exigir_extensao and not _tem_extensao_imagem(absoluta):
@@ -396,7 +409,6 @@ async def descrever_imagens_pagina(
             vistas.add(absoluta)
             urls_imagens.append(absoluta)
 
-    # og:image e twitter:image têm prioridade — são a foto principal da página
     for prop in ["og:image", "og:image:secure_url"]:
         tag = soup.find("meta", property=prop)
         if tag and tag.get("content"):
@@ -407,7 +419,6 @@ async def descrever_imagens_pagina(
         if tag and tag.get("content"):
             adicionar(tag["content"])
 
-    # Todos os atributos que sites usam para lazy-loading
     ATTRS_SRC = ["src", "data-src", "data-lazy-src", "data-lazy", "data-original",
                  "data-image", "data-img", "data-url", "data-bg", "data-photo",
                  "data-hi-res-src", "data-full-src", "data-large", "data-zoom-image"]
@@ -416,29 +427,24 @@ async def descrever_imagens_pagina(
         for attr in ATTRS_SRC:
             val = img.get(attr)
             if val:
-                # <img> src exige extensão — evita URLs de diretório/perfil
                 adicionar(val, exigir_extensao=True)
                 break
-        # srcset pode ter várias URLs — pega a de maior resolução
         srcset = img.get("srcset") or img.get("data-srcset")
         if srcset:
             partes = [p.strip().split()[0] for p in srcset.split(",") if p.strip()]
             if partes:
                 adicionar(partes[-1], exigir_extensao=True)
 
-    # Links <a> que apontam diretamente para imagens
     for a in soup.find_all("a", href=True):
         href = a["href"].lower()
         if any(href.split("?")[0].endswith(e) for e in EXTS_IMAGEM):
             adicionar(a["href"])
 
-    # Padrão de URL de imagem para uso em JSON/HTML — aceita query params após a extensão
     _RE_IMG_URL = re.compile(
         r'https?://[^\s\'"<>]+\.(?:jpg|jpeg|png|webp|gif|avif|bmp)(?:[?#][^\s\'"<>]*)?',
         re.IGNORECASE,
     )
 
-    # __NEXT_DATA__ — Next.js embute todos os dados da página como JSON
     next_data_tag = soup.find("script", id="__NEXT_DATA__")
     if next_data_tag and next_data_tag.string:
         try:
@@ -449,7 +455,6 @@ async def descrever_imagens_pagina(
         except Exception:
             pass
 
-    # JSON-LD (schema.org) — contém imagens do produto/perfil
     for script in soup.find_all("script", type="application/ld+json"):
         try:
             dados_ld = json.loads(script.string or "")
@@ -459,11 +464,9 @@ async def descrever_imagens_pagina(
         except Exception:
             pass
 
-    # Regex geral em todo o HTML — captura URLs de imagem embutidas em JS inline
     for url_inline in _RE_IMG_URL.findall(html):
         adicionar(url_inline)
 
-    # Remove ruído óbvio e SVGs (PIL não processa SVG)
     EXCLUIR = ["favicon", "pixel", "track", "1x1", "blank", "spacer", "ad.gif",
                "ads.", "doubleclick", "google-analytics", "googletagmanager", ".svg"]
     urls_filtradas = [
@@ -482,7 +485,6 @@ async def descrever_imagens_pagina(
     estilo = _estilo_usuario(usuario)
     prompt_final = PROMPT_DESCRICAO + contexto_pessoas + estilo
 
-    # Cabeçalhos para download com Referer (evita hotlink protection)
     headers_img = {
         **headers_pagina,
         "Referer": url_base,
@@ -493,12 +495,10 @@ async def descrever_imagens_pagina(
     erros_debug = []
     for url_img in urls_filtradas:
         descricao = None
-        # Tentativa 1: passa URL direto ao Replicate (rápido, sem download)
         try:
             descricao = chamar_modelo_url(url_img, prompt_final)
         except Exception as e1:
             erro_str = str(e1)
-            # Tentativa 2: site usa hotlink protection → baixa com Referer e envia como data URI
             if any(c in erro_str for c in ["404", "403", "401", "forbidden", "not found", "not be"]):
                 try:
                     async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers_img) as img_client:

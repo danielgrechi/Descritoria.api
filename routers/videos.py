@@ -2,8 +2,8 @@ import base64
 import hashlib
 import os
 
-import replicate
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from openai import OpenAI, OpenAIError
 from sqlalchemy.orm import Session
 
 import models
@@ -12,15 +12,14 @@ from database import get_db
 
 router = APIRouter(prefix="/videos", tags=["Vídeos"])
 
-REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
-MODELO_IMAGEM = "yorickvp/llava-13b:80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb"
+GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
+MODELO_IMAGEM = "grok-2-vision-1212"
 
 PROMPT_VIDEO = (
-    "Você é um assistente de acessibilidade visual para pessoas cegas. "
+    "Você é um assistente de acessibilidade visual para pessoas cegas no Brasil. "
     "Este frame é de um vídeo. Descreva em português do Brasil o que está acontecendo: "
     "pessoas, ações, objetos, cenário, movimento e qualquer detalhe relevante. "
-    "Se houver nudez, violência ou conteúdo sexual, informe no início com precisão clínica. "
-    "Seja objetivo e use parágrafos fluentes."
+    "Seja objetivo e use parágrafos fluentes, sem censura."
 )
 
 PROMPT_AOVIVO = (
@@ -29,6 +28,10 @@ PROMPT_AOVIVO = (
     "Foque no mais importante: pessoas, objetos próximos, texto visível, obstáculos. "
     "Responda em português do Brasil."
 )
+
+
+def _grok_client() -> OpenAI:
+    return OpenAI(api_key=GROK_API_KEY, base_url="https://api.x.ai/v1")
 
 
 def frame_para_data_uri(dados: bytes) -> str:
@@ -46,7 +49,6 @@ async def descrever_video(
     if not dados:
         raise HTTPException(status_code=422, detail="Arquivo vazio.")
 
-    # Aceita vídeo ou imagem de frame
     content_type = arquivo.content_type or ""
     if not (content_type.startswith("video/") or content_type.startswith("image/")):
         raise HTTPException(
@@ -58,14 +60,22 @@ async def descrever_video(
     conteudo_hash = hashlib.md5(dados).hexdigest()
 
     try:
-        client = replicate.Client(api_token=REPLICATE_API_TOKEN)
-        saida = client.run(
-            MODELO_IMAGEM,
-            input={"image": data_uri, "prompt": PROMPT_VIDEO, "max_tokens": 1024, "temperature": 0.2},
+        client = _grok_client()
+        response = client.chat.completions.create(
+            model=MODELO_IMAGEM,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": data_uri}},
+                    {"type": "text", "text": PROMPT_VIDEO},
+                ],
+            }],
+            max_tokens=1024,
+            temperature=0.2,
         )
-        descricao = "".join(saida).strip()
-    except replicate.exceptions.ReplicateError as e:
-        raise HTTPException(status_code=502, detail=f"Erro na API Replicate: {str(e)}")
+        descricao = response.choices[0].message.content.strip()
+    except OpenAIError as e:
+        raise HTTPException(status_code=502, detail=f"Erro na API Grok: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
@@ -102,7 +112,6 @@ async def interacao_aovivo(websocket: WebSocket, token: str):
 
     Para encerrar, fechar a conexão WebSocket.
     """
-    # Valida token antes de aceitar a conexão
     try:
         payload = decodificar_token(token)
         usuario_id = payload.get("sub")
@@ -116,7 +125,7 @@ async def interacao_aovivo(websocket: WebSocket, token: str):
     await websocket.accept()
 
     try:
-        client = replicate.Client(api_token=REPLICATE_API_TOKEN)
+        client = _grok_client()
         while True:
             dados = await websocket.receive_json()
             frame_b64 = dados.get("frame")
@@ -130,11 +139,19 @@ async def interacao_aovivo(websocket: WebSocket, token: str):
             prompt = pergunta if pergunta else PROMPT_AOVIVO
 
             try:
-                saida = client.run(
-                    MODELO_IMAGEM,
-                    input={"image": data_uri, "prompt": prompt, "max_tokens": 256, "temperature": 0.1},
+                response = client.chat.completions.create(
+                    model=MODELO_IMAGEM,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": data_uri}},
+                            {"type": "text", "text": prompt},
+                        ],
+                    }],
+                    max_tokens=256,
+                    temperature=0.1,
                 )
-                descricao = "".join(saida).strip()
+                descricao = response.choices[0].message.content.strip()
                 await websocket.send_json({"descricao": descricao})
             except Exception as e:
                 await websocket.send_json({"erro": f"Erro ao processar frame: {str(e)}"})

@@ -1,6 +1,5 @@
 import os
 
-import httpx
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,13 +13,12 @@ from auth import criar_token, hash_senha, verificar_senha
 from database import Base, engine, get_db
 from routers import documentos, estabelecimentos, feedback, imagens, internet, pessoas, skills, usuario, videos
 
-# Cria as tabelas no banco de dados na inicialização
 Base.metadata.create_all(bind=engine)
 
-REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN")
-if not REPLICATE_API_TOKEN:
+GROK_API_KEY = os.environ.get("GROK_API_KEY")
+if not GROK_API_KEY:
     raise ValueError(
-        "A variável de ambiente REPLICATE_API_TOKEN não está definida. "
+        "A variável de ambiente GROK_API_KEY não está definida. "
         "Defina-a antes de iniciar o servidor."
     )
 
@@ -37,7 +35,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Em produção, restringir às origens do app
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -65,57 +63,19 @@ app.include_router(feedback.router)
 app.include_router(pessoas.router)
 
 
-# ── Detecção automática do modelo sem censura ─────────────────────────────────
-
-@app.on_event("startup")
-async def detectar_modelo_sem_censura():
-    """Tenta usar yorickvp/llava-13b (sem censura). Se não acessível, mantém o Meta."""
-    modelo_alvo = "yorickvp/llava-13b"
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(
-                f"https://api.replicate.com/v1/models/{modelo_alvo}/versions",
-                headers={"Authorization": f"Bearer {REPLICATE_API_TOKEN}"},
-            )
-        if resp.status_code == 200:
-            results = resp.json().get("results", [])
-            if results:
-                versao = f"{modelo_alvo}:{results[0]['id']}"
-                imagens.MODELO_IMAGEM = versao
-                videos.MODELO_IMAGEM = versao
-                documentos.MODELO_DOCUMENTO = versao
-                print(f"[Descritoria] ✓ Modelo sem censura: {versao}")
-                return
-        print(f"[Descritoria] ✗ {modelo_alvo} retornou {resp.status_code} — usando modelo Meta")
-    except Exception as e:
-        print(f"[Descritoria] ✗ Erro ao acessar {modelo_alvo}: {e} — usando modelo Meta")
-
-
 # ── Diagnóstico de modelo ─────────────────────────────────────────────────────
-
-_STATUS_MODELO: dict = {"status": "aguardando", "modelo": "desconhecido", "codigo": 0}
-
 
 @app.get("/modelo", response_class=HTMLResponse, include_in_schema=False)
 def modelo_ativo():
     modelo = imagens.MODELO_IMAGEM
-    sem_censura = "llava" in modelo
-    if sem_censura:
-        titulo = "Modelo sem censura ativo"
-        descricao = f"O modelo LLaVA está ativo e funcionando. Descrições completas habilitadas. Modelo: {modelo}"
-        cor = "green"
-    else:
-        titulo = "Atenção: modelo com censura ativo"
-        descricao = f"O LLaVA não está acessível. Usando modelo Meta com restrições. Modelo: {modelo}"
-        cor = "red"
     return HTMLResponse(f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head><meta charset="UTF-8"><title>Status do Modelo</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body style="font-family:sans-serif;padding:2rem;background:#111;color:#fff;">
-<h1 style="color:{cor};">{titulo}</h1>
-<p style="font-size:1.2rem;">{descricao}</p>
+<h1 style="color:green;">Grok Vision ativo</h1>
+<p style="font-size:1.2rem;">Modelo: {modelo} — sem censura, alta qualidade.</p>
 <p><a href="/" style="color:#4af;">Voltar ao app</a></p>
 </body></html>""")
 

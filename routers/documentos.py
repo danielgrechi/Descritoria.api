@@ -3,8 +3,8 @@ import hashlib
 import io
 import os
 
-import replicate
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from openai import OpenAI, OpenAIError
 from PIL import Image
 from sqlalchemy.orm import Session
 
@@ -14,15 +14,15 @@ from database import get_db
 
 router = APIRouter(prefix="/documentos", tags=["Documentos"])
 
-REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
-MODELO_DOCUMENTO = "yorickvp/llava-13b:80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb"
+GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
+MODELO_DOCUMENTO = "grok-2-vision-1212"
 
 TIPOS_PERMITIDOS = {
     "image/jpeg", "image/png", "image/webp", "image/bmp", "image/tiff",
 }
 
 PROMPT_DOCUMENTO = (
-    "Você é um leitor de documentos para pessoas cegas. "
+    "Você é um leitor de documentos para pessoas cegas no Brasil. "
     "Leia e transcreva em português do Brasil TODO o texto visível nesta imagem, "
     "preservando a estrutura (parágrafos, listas, títulos). "
     "Após a transcrição, descreva brevemente o layout do documento "
@@ -37,6 +37,10 @@ FORMATO_PARA_MIME = {
     "BMP": "image/bmp",
     "TIFF": "image/tiff",
 }
+
+
+def _grok_client() -> OpenAI:
+    return OpenAI(api_key=GROK_API_KEY, base_url="https://api.x.ai/v1")
 
 
 def validar_arquivo(dados: bytes) -> str:
@@ -74,14 +78,22 @@ async def ler_documento(
     conteudo_hash = hashlib.md5(dados).hexdigest()
 
     try:
-        client = replicate.Client(api_token=REPLICATE_API_TOKEN)
-        saida = client.run(
-            MODELO_DOCUMENTO,
-            input={"image": data_uri, "prompt": PROMPT_DOCUMENTO, "max_tokens": 2048, "temperature": 0.1},
+        client = _grok_client()
+        response = client.chat.completions.create(
+            model=MODELO_DOCUMENTO,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": data_uri}},
+                    {"type": "text", "text": PROMPT_DOCUMENTO},
+                ],
+            }],
+            max_tokens=2048,
+            temperature=0.1,
         )
-        transcricao = "".join(saida).strip()
-    except replicate.exceptions.ReplicateError as e:
-        raise HTTPException(status_code=502, detail=f"Erro na API Replicate: {str(e)}")
+        transcricao = response.choices[0].message.content.strip()
+    except OpenAIError as e:
+        raise HTTPException(status_code=502, detail=f"Erro na API Grok: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
@@ -100,7 +112,6 @@ async def ler_documento(
     return {
         "id": registro.id,
         "texto": transcricao,
-        "transcricao": transcricao,
         "modelo": MODELO_DOCUMENTO,
         "formato_original": mime_type,
         "tipo": "documento",
