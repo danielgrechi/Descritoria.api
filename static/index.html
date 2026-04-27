@@ -571,12 +571,13 @@
       const r = await fetch(`${API}/estabelecimentos${params}`);
       const d = await r.json();
       if (r.ok) {
-        if (!d.length) {
+        const itens = d.items || [];
+        if (!itens.length) {
           res.innerHTML = '<p style="color:#888">Nenhum estabelecimento encontrado.</p>';
           st.textContent = '';
           return;
         }
-        res.innerHTML = d.map(e => `
+        res.innerHTML = itens.map(e => `
           <div class="resultado" style="margin-bottom:10px">
             <strong>${e.nome}</strong><br>
             <small style="color:#888">${e.categoria || ''}</small><br>
@@ -584,7 +585,7 @@
             ${e.descricao ? `<span style="color:#aaa;font-size:15px">${e.descricao}</span>` : ''}
             ${e.verificado ? '<span style="color:#30D158"> ✓ Verificado</span>' : ''}
           </div>`).join('');
-        st.textContent = `${d.length} local(is) encontrado(s)`;
+        st.textContent = `${d.total || itens.length} local(is) encontrado(s)`;
       } else {
         st.innerHTML = `<span class="erro">${d.detail}</span>`;
       }
