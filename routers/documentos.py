@@ -15,7 +15,7 @@ from database import get_db
 router = APIRouter(prefix="/documentos", tags=["Documentos"])
 
 GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
-MODELO_DOCUMENTO = "grok-2-vision-1212"
+MODELO_DOCUMENTO = "grok-2-vision"
 
 TIPOS_PERMITIDOS = {
     "image/jpeg", "image/png", "image/webp", "image/bmp", "image/tiff",

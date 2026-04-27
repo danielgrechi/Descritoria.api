@@ -13,7 +13,7 @@ from database import get_db
 router = APIRouter(prefix="/videos", tags=["Vídeos"])
 
 GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
-MODELO_IMAGEM = "grok-2-vision-1212"
+MODELO_IMAGEM = "grok-2-vision"
 
 PROMPT_VIDEO = (
     "Você é um assistente de acessibilidade visual para pessoas cegas no Brasil. "
