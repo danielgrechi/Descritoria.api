@@ -83,6 +83,7 @@
   <button onclick="trocarAba('pessoas', this)" role="tab">🧠 Pessoas</button>
   <button onclick="trocarAba('documentos', this)" role="tab">📄 Documentos</button>
   <button onclick="trocarAba('estabelecimentos', this)" role="tab">🏪 Locais</button>
+  <button onclick="trocarAba('aovivo', this)" role="tab">🎥 Ao Vivo</button>
   <button onclick="trocarAba('conta', this)" role="tab">👤 Conta</button>
 </nav>
 
@@ -250,6 +251,33 @@
     <textarea id="descricaoLocal" rows="2" placeholder="Descreva as facilidades de acessibilidade..." aria-label="Descrição das facilidades"></textarea>
     <button class="btn-verde" onclick="cadastrarLocal()" aria-label="Cadastrar este local">✅ Cadastrar Local</button>
     <div class="status" id="statusCadastroLocal" aria-live="polite"></div>
+  </section>
+</div>
+
+<!-- ABA: AO VIVO -->
+<div id="aba-aovivo" class="aba" role="tabpanel">
+  <section aria-label="Câmera ao vivo">
+    <h2>🎥 Câmera ao Vivo</h2>
+    <p style="color:#888;margin-bottom:14px;font-size:15px">A IA descreve o que a câmera vê a cada 5 segundos, em voz alta. Use para explorar ambientes, ler placas ou identificar objetos à sua frente.</p>
+
+    <video id="videoAoVivo" autoplay playsinline muted
+      style="display:none;width:100%;border-radius:12px;max-height:220px;object-fit:cover;margin-bottom:12px;"
+      aria-label="Visualização da câmera"></video>
+    <canvas id="canvasCaptura" style="display:none"></canvas>
+
+    <label for="perguntaAoVivo" style="display:block;margin-bottom:6px;color:#aaa;font-size:14px;">Pergunta opcional (ex: "O que tem na minha frente?" "Tem texto visível?")</label>
+    <input type="text" id="perguntaAoVivo" placeholder="Deixe vazio para descrição geral..." aria-label="Pergunta para a câmera ao vivo" />
+
+    <div class="linha">
+      <button class="btn-verde" id="btnIniciarCamera" onclick="iniciarCameraAoVivo()" aria-label="Iniciar câmera e descrições ao vivo">▶ Iniciar</button>
+      <button class="btn-vermelho" id="btnPararCamera" onclick="pararCameraAoVivo()" style="display:none" aria-label="Parar câmera">⏹ Parar</button>
+    </div>
+
+    <div class="status" id="statusAoVivo" aria-live="polite"></div>
+
+    <div id="resultadoAoVivo" class="resultado" role="status" aria-live="assertive" style="display:none;margin-top:12px;font-size:17px;"></div>
+
+    <button id="btnOuvirAoVivo" class="btn-laranja" onclick="pararVoz()" style="display:none;margin-top:8px" aria-label="Parar leitura em voz">⏹ Parar Voz</button>
   </section>
 </div>
 
@@ -923,6 +951,98 @@
 
   function pararVoz() {
     speechSynthesis.cancel();
+  }
+
+  // ── Câmera ao Vivo ────────────────────────────────────────────────────────
+
+  let wsAoVivo = null;
+  let streamCamera = null;
+  let intervalDescricao = null;
+
+  async function iniciarCameraAoVivo() {
+    if (!tokenJWT) {
+      document.getElementById('statusAoVivo').textContent = 'Faça login primeiro.';
+      return;
+    }
+    try {
+      streamCamera = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      });
+    } catch (e) {
+      document.getElementById('statusAoVivo').textContent = 'Não foi possível acessar a câmera: ' + e.message;
+      return;
+    }
+
+    const video = document.getElementById('videoAoVivo');
+    video.srcObject = streamCamera;
+    video.style.display = 'block';
+
+    document.getElementById('btnIniciarCamera').style.display = 'none';
+    document.getElementById('btnPararCamera').style.display = '';
+    document.getElementById('statusAoVivo').textContent = 'Câmera iniciada. Aguardando primeira descrição…';
+
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    wsAoVivo = new WebSocket(`${proto}//${location.host}/videos/aovivo?token=${tokenJWT}`);
+
+    wsAoVivo.onopen = () => {
+      document.getElementById('statusAoVivo').textContent = 'Conectado. Descrevendo a cada 5 segundos…';
+      enviarFrameAoVivo();
+      intervalDescricao = setInterval(enviarFrameAoVivo, 5000);
+    };
+
+    wsAoVivo.onmessage = (e) => {
+      const dados = JSON.parse(e.data);
+      if (dados.descricao) {
+        const resultado = document.getElementById('resultadoAoVivo');
+        resultado.style.display = '';
+        resultado.textContent = dados.descricao;
+        document.getElementById('btnOuvirAoVivo').style.display = '';
+        document.getElementById('statusAoVivo').textContent = 'Descrevendo…';
+        lerEmVoz(dados.descricao);
+      } else if (dados.erro) {
+        document.getElementById('statusAoVivo').textContent = 'Erro: ' + dados.erro;
+      }
+    };
+
+    wsAoVivo.onerror = () => {
+      document.getElementById('statusAoVivo').textContent = 'Erro na conexão WebSocket.';
+    };
+
+    wsAoVivo.onclose = () => {
+      clearInterval(intervalDescricao);
+      document.getElementById('statusAoVivo').textContent = 'Conexão encerrada.';
+    };
+  }
+
+  function enviarFrameAoVivo() {
+    const video = document.getElementById('videoAoVivo');
+    const canvas = document.getElementById('canvasCaptura');
+    if (!video.videoWidth || !wsAoVivo || wsAoVivo.readyState !== WebSocket.OPEN) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+
+    const base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+    const pergunta = document.getElementById('perguntaAoVivo').value.trim();
+    const payload = pergunta ? { frame: base64, pergunta } : { frame: base64 };
+    wsAoVivo.send(JSON.stringify(payload));
+    document.getElementById('statusAoVivo').textContent = 'Processando…';
+  }
+
+  function pararCameraAoVivo() {
+    clearInterval(intervalDescricao);
+    intervalDescricao = null;
+    if (wsAoVivo) { wsAoVivo.close(); wsAoVivo = null; }
+    if (streamCamera) { streamCamera.getTracks().forEach(t => t.stop()); streamCamera = null; }
+    const video = document.getElementById('videoAoVivo');
+    video.srcObject = null;
+    video.style.display = 'none';
+    document.getElementById('btnIniciarCamera').style.display = '';
+    document.getElementById('btnPararCamera').style.display = 'none';
+    document.getElementById('btnOuvirAoVivo').style.display = 'none';
+    document.getElementById('statusAoVivo').textContent = 'Câmera parada.';
+    pararVoz();
   }
 
   // ── Start ─────────────────────────────────────────────────────────────────
