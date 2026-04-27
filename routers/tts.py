@@ -21,7 +21,7 @@ class TTSRequest(BaseModel):
 
 
 def _tts_client() -> OpenAI:
-    return OpenAI(api_key=GROK_TTS_KEY, base_url="https://api.x.ai/v1")
+    return OpenAI(api_key=GROK_TTS_KEY, base_url="https://api.x.ai/v1", timeout=8.0)
 
 
 @router.post("/falar", summary="Converte texto em fala (Grok TTS)")

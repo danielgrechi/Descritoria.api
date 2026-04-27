@@ -946,12 +946,17 @@
     if (!texto) return;
     pararVoz();
 
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 3000);
+
     try {
       const resp = await fetchComAuth('/tts/falar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ texto }),
+        signal: controller.signal,
       });
+      clearTimeout(tid);
       if (!resp.ok) throw new Error('TTS indisponível');
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
@@ -959,6 +964,7 @@
       _audioAtual.play();
       _audioAtual.onended = () => { URL.revokeObjectURL(url); _audioAtual = null; };
     } catch {
+      clearTimeout(tid);
       // fallback para voz do sistema
       const utt = new SpeechSynthesisUtterance(texto);
       utt.lang = 'pt-BR';
