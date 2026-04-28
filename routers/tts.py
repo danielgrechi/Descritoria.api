@@ -13,10 +13,8 @@ from auth import obter_usuario_atual
 router = APIRouter(prefix="/tts", tags=["TTS"])
 log = logging.getLogger("descritoria.tts")
 
-# Prefere a chave principal; GROK_TTS_KEY como alternativa
 GROK_TTS_KEY = os.environ.get("GROK_API_KEY") or os.environ.get("GROK_TTS_KEY", "")
 VOZ_TTS = os.environ.get("TTS_VOICE", "Eve")
-IDIOMA_TTS = os.environ.get("TTS_LANG", "pt")
 
 
 class TTSRequest(BaseModel):
@@ -29,7 +27,6 @@ def status_tts():
         "motor": "xai-tts",
         "endpoint": "https://api.x.ai/v1/tts",
         "voz": VOZ_TTS,
-        "idioma": IDIOMA_TTS,
         "chave_configurada": bool(GROK_TTS_KEY),
         "primeiros_chars": GROK_TTS_KEY[:12] + "..." if GROK_TTS_KEY else "",
     }
@@ -47,6 +44,9 @@ async def falar_texto(
     if not GROK_TTS_KEY:
         raise HTTPException(status_code=503, detail="Chave de API não configurada.")
 
+    # Prefixo induz sotaque brasileiro correto na voz Eve
+    texto_para_voz = "[fala em português brasileiro, sotaque do Brasil] " + texto[:4000]
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
@@ -56,14 +56,11 @@ async def falar_texto(
                     "Content-Type": "application/json",
                 },
                 json={
-                    "text": texto[:4096],
+                    "text": texto_para_voz,
                     "voice_id": VOZ_TTS,
-                    "output_format": {
-                        "codec": "mp3",
-                        "sample_rate": 44100,
-                        "bit_rate": 128000,
-                    },
-                    "language": IDIOMA_TTS,
+                    "language": "pt-BR",
+                    "codec": "mp3",
+                    "text_normalization": True,
                 },
             )
             if not resp.is_success:
