@@ -13,10 +13,10 @@ from auth import obter_usuario_atual
 router = APIRouter(prefix="/tts", tags=["TTS"])
 log = logging.getLogger("descritoria.tts")
 
-# Prefere a chave principal (que funciona para imagens) sobre a chave de voz agente
+# Prefere a chave principal; GROK_TTS_KEY como alternativa
 GROK_TTS_KEY = os.environ.get("GROK_API_KEY") or os.environ.get("GROK_TTS_KEY", "")
-MODELO_TTS = os.environ.get("TTS_MODEL", "grok-tts-preview")
 VOZ_TTS = os.environ.get("TTS_VOICE", "Eve")
+IDIOMA_TTS = os.environ.get("TTS_LANG", "pt")
 
 
 class TTSRequest(BaseModel):
@@ -27,9 +27,9 @@ class TTSRequest(BaseModel):
 def status_tts():
     return {
         "motor": "xai-tts",
-        "endpoint": "https://api.x.ai/v1/audio/speech",
-        "modelo": MODELO_TTS,
+        "endpoint": "https://api.x.ai/v1/tts",
         "voz": VOZ_TTS,
+        "idioma": IDIOMA_TTS,
         "chave_configurada": bool(GROK_TTS_KEY),
         "primeiros_chars": GROK_TTS_KEY[:12] + "..." if GROK_TTS_KEY else "",
     }
@@ -50,15 +50,20 @@ async def falar_texto(
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                "https://api.x.ai/v1/audio/speech",
+                "https://api.x.ai/v1/tts",
                 headers={
                     "Authorization": f"Bearer {GROK_TTS_KEY}",
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": MODELO_TTS,
-                    "input": texto[:4096],
-                    "voice": VOZ_TTS,
+                    "text": texto[:4096],
+                    "voice_id": VOZ_TTS,
+                    "output_format": {
+                        "codec": "mp3",
+                        "sample_rate": 44100,
+                        "bit_rate": 128000,
+                    },
+                    "language": IDIOMA_TTS,
                 },
             )
             if not resp.is_success:
@@ -67,10 +72,9 @@ async def falar_texto(
                     status_code=502,
                     detail=f"xAI TTS erro {resp.status_code}: {resp.text[:200]}",
                 )
-            content_type = resp.headers.get("content-type", "audio/mpeg")
             return StreamingResponse(
                 io.BytesIO(resp.content),
-                media_type=content_type,
+                media_type="audio/mpeg",
                 headers={"Content-Disposition": "inline"},
             )
     except httpx.TimeoutException:
