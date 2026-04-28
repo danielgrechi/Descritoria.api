@@ -936,6 +936,9 @@
 
   let _audioAtual = null;
 
+  // Minimal silent WAV para desbloquear áudio no iOS em contexto de gesto
+  const _SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+
   async function lerEmVoz(origem) {
     let texto = '';
     if (origem === 'imagem') texto = ultimoTextoImagem;
@@ -946,15 +949,15 @@
     if (!texto) return;
     pararVoz();
 
-    // Inicia voz do sistema IMEDIATAMENTE (iOS exige contexto de gesto do usuário)
-    const utt = new SpeechSynthesisUtterance(texto);
-    utt.lang = 'pt-BR';
-    utt.rate = 0.95;
-    speechSynthesis.speak(utt);
+    // iOS: desbloqueia áudio no contexto síncrono do gesto do usuário
+    const unlock = new Audio(_SILENT_WAV);
+    unlock.play().catch(() => {});
 
-    // Tenta Grok TTS em paralelo — se chegar, troca pela voz da IA
+    const stGlobal = document.getElementById('statusGlobal');
+    if (stGlobal) stGlobal.textContent = '🔊 Carregando voz…';
+
     const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 8000);
+    const tid = setTimeout(() => controller.abort(), 25000);
     try {
       const resp = await fetchComAuth('/tts/falar', {
         method: 'POST',
@@ -963,21 +966,20 @@
         signal: controller.signal,
       });
       clearTimeout(tid);
-      if (!resp.ok) return; // voz do sistema já tocando
+      if (stGlobal) stGlobal.textContent = '';
+      if (!resp.ok) return;
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
-      speechSynthesis.cancel(); // para voz do sistema
       _audioAtual = new Audio(url);
       _audioAtual.play();
       _audioAtual.onended = () => { URL.revokeObjectURL(url); _audioAtual = null; };
     } catch {
       clearTimeout(tid);
-      // voz do sistema continua tocando normalmente
+      if (stGlobal) stGlobal.textContent = '';
     }
   }
 
   function pararVoz() {
-    speechSynthesis.cancel();
     if (_audioAtual) { _audioAtual.pause(); _audioAtual = null; }
   }
 
