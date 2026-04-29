@@ -155,10 +155,21 @@ try:
         usuario_obj = db.query(models.Usuario).filter(models.Usuario.email == body.email).first()
 
         if not usuario_obj:
-            raise HTTPException(status_code=401, detail="Usuário não encontrado.")
-
-        if not _senha_ok(body.senha, usuario_obj.senha_hash):
-            raise HTTPException(status_code=401, detail="Senha inválida.")
+            # Cria automaticamente — protótipo pessoal, sem verificação de senha
+            usuario_obj = models.Usuario(
+                nome=body.email.split("@")[0],
+                email=body.email,
+                senha_hash="",
+                saldo_perceptmoney=0.0,
+                config_voz="padrao",
+                integracoes="{}",
+                estilo_descricao="",
+                perfil_aprendizado_ia="",
+                preferencias_extraidas="{}",
+            )
+            db.add(usuario_obj)
+            db.commit()
+            db.refresh(usuario_obj)
 
         token = _gerar_token_usuario(usuario_obj)
         return schemas.TokenResponse(access_token=token)
