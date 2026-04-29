@@ -519,6 +519,34 @@ class PaginaUrlRequest(BaseModel):
     limite: int = Field(5, ge=1, le=10)
 
 
+def _extrair_json_embutido(html: str) -> list[str]:
+    """Extrai URLs de imagem de blocos JSON embutidos no HTML (Next.js, Nuxt, etc.)."""
+    urls: list[str] = []
+    re_url = re.compile(r'https?://[^\s\'"<>\\,\]}\)]+', re.IGNORECASE)
+
+    # __NEXT_DATA__ (Next.js), __NUXT__ (Nuxt), window.__STATE__ e similares
+    script_re = re.compile(
+        r'<script[^>]*(?:id=["\']__NEXT_DATA__["\']|type=["\']application/json["\'])[^>]*>(.*?)</script>',
+        re.DOTALL | re.IGNORECASE,
+    )
+    for bloco in script_re.findall(html):
+        for u in re_url.findall(bloco):
+            if _parece_url_imagem(u):
+                urls.append(u)
+
+    # qualquer <script> com JSON que contenha chaves de imagem comuns
+    chaves_img = re.compile(
+        r'"(?:image|img|photo|foto|thumb|thumbnail|cover|avatar|src|url|picture|preview|banner)":\s*"(https?://[^"]+)"',
+        re.IGNORECASE,
+    )
+    for bloco in re.findall(r'<script[^>]*>(.*?)</script>', html, re.DOTALL | re.IGNORECASE):
+        for u in chaves_img.findall(bloco):
+            if _parece_url_imagem(u):
+                urls.append(u)
+
+    return urls
+
+
 def _coletar_urls_imagens_da_pagina(html: str, url_base: str) -> list[str]:
     soup = BeautifulSoup(html, "html.parser")
     vistas: set[str] = set()
@@ -537,6 +565,10 @@ def _coletar_urls_imagens_da_pagina(html: str, url_base: str) -> list[str]:
         if absoluta not in vistas:
             vistas.add(absoluta)
             urls.append(absoluta)
+
+    # JSON embutido (Next.js / Nuxt / SSR) — primeiro porque tem as melhores URLs
+    for u in _extrair_json_embutido(html):
+        adicionar(u)
 
     # Metadados Open Graph e Twitter — geralmente as melhores thumbnails
     for prop in ["og:image", "og:image:secure_url", "og:video:thumbnail", "og:video:image"]:
@@ -584,7 +616,7 @@ def _coletar_urls_imagens_da_pagina(html: str, url_base: str) -> list[str]:
         if href and _parece_url_imagem(href):
             adicionar(href)
 
-    # URLs de imagem embutidas em JSON, scripts e CSS inline
+    # URLs de imagem embutidas em qualquer parte do HTML (CSS inline, JSON solto)
     re_url = re.compile(r'https?://[^\s\'"<>\\]+', re.IGNORECASE)
     for match in re_url.findall(html):
         if _parece_url_imagem(match):
