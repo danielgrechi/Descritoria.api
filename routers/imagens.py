@@ -519,6 +519,49 @@ class PaginaUrlRequest(BaseModel):
     limite: int = Field(5, ge=1, le=10)
 
 
+@router.post("/diagnostico-pagina", summary="Diagnóstico: mostra o que o servidor consegue extrair de uma página")
+async def diagnostico_pagina(
+    body: PaginaUrlRequest,
+    usuario: models.Usuario = Depends(obter_usuario_atual),
+):
+    headers_pagina = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers_pagina) as client:
+            resp = await client.get(body.url)
+            status_code = resp.status_code
+            content_type = resp.headers.get("content-type", "")
+            html = resp.text
+            url_base = str(resp.url)
+    except Exception as e:
+        return {"erro_conexao": str(e)}
+
+    tem_next_data = "__NEXT_DATA__" in html
+    tem_nuxt = "__NUXT__" in html
+    urls_json = _extrair_json_embutido(html)
+    urls_todas = _coletar_urls_imagens_da_pagina(html, url_base)
+
+    return {
+        "status_http": status_code,
+        "content_type": content_type,
+        "html_tamanho": len(html),
+        "html_inicio": html[:500],
+        "tem_next_data": tem_next_data,
+        "tem_nuxt": tem_nuxt,
+        "urls_do_json_embutido": urls_json[:10],
+        "total_urls_encontradas": len(urls_todas),
+        "primeiras_urls": urls_todas[:10],
+    }
+
+
 def _extrair_json_embutido(html: str) -> list[str]:
     """Extrai URLs de imagem de blocos JSON embutidos no HTML (Next.js, Nuxt, etc.)."""
     urls: list[str] = []
