@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Descritoria</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; line-height: 1.5; }
+    header, main { max-width: 920px; margin: 0 auto; padding: 1rem; }
+    nav { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
+    button, input, textarea, select { font: inherit; min-height: 44px; }
+    button { padding: .7rem 1rem; border-radius: .75rem; border: 1px solid currentColor; cursor: pointer; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: .75rem; border-radius: .75rem; border: 1px solid #777; margin: .35rem 0 1rem; }
+    textarea { min-height: 110px; }
+    section[hidden] { display: none; }
+    .card { border: 1px solid #777; border-radius: 1rem; padding: 1rem; margin: 1rem 0; }
+    .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
+    .status { padding: .75rem; border-radius: .75rem; border: 1px solid #777; margin: 1rem 0; }
+    .resultado { white-space: pre-wrap; font-size: 1.05rem; }
+    video, canvas { max-width: 100%; border-radius: 1rem; }
+    .sr-only { position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Descritoria</h1>
+  <p>Acessibilidade visual com inteligência artificial.</p>
+  <div id="status" class="status" role="status" aria-live="polite">Carregando app.</div>
+  <nav aria-label="Navegação principal">
+    <button type="button" data-tab="camera">Câmera</button>
+    <button type="button" data-tab="internet">Internet</button>
+    <button type="button" data-tab="documentos">Documento</button>
+    <button type="button" data-tab="locais">Locais</button>
+    <button type="button" data-tab="aovivo">Ao Vivo</button>
+    <button type="button" data-tab="conta">Conta</button>
+  </nav>
+</header>
+
+<main>
+  <section id="tab-camera">
+    <h2>Descrever imagem</h2>
+    <p>Escolha uma foto da galeria ou tire uma foto com a câmera. A IA vai gerar uma descrição única, em português, sem inventar elementos.</p>
+
+    <div class="actions">
+      <button type="button" id="btnGaleria">Escolher foto da galeria</button>
+      <button type="button" id="btnCamera">Tirar foto com a câmera</button>
+    </div>
+
+    <input id="inputGaleria" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/*">
+    <input id="inputCamera" class="sr-only" type="file" accept="image/*" capture="environment">
+
+    <div id="resultadoImagem" class="card" aria-live="polite" hidden>
+      <h3>Descrição</h3>
+      <div id="textoDescricao" class="resultado"></div>
+      <div class="actions">
+        <button type="button" id="ouvirDescricao" onclick="ouvirDescricaoAtual()">Ouvir descrição</button>
+        <button type="button" id="pararVoz1">Parar voz</button>
+      </div>
+
+      <h3>Pergunte sobre esta imagem</h3>
+      <label for="perguntaImagem">Digite sua pergunta</label>
+      <textarea id="perguntaImagem" placeholder="Exemplo: há texto visível? O que está no canto esquerdo?"></textarea>
+      <button type="button" id="btnPerguntarImagem">Perguntar</button>
+
+      <div id="respostaPerguntaBox" class="card" aria-live="polite" hidden>
+        <h4>Resposta</h4>
+        <div id="respostaPergunta" class="resultado"></div>
+        <button type="button" id="ouvirResposta">Ouvir resposta</button>
+      </div>
+
+      <h3>Feedback da descrição</h3>
+      <p>Seu feedback ajuda a IA a aprender seu estilo de descrição.</p>
+      <div class="actions">
+        <button type="button" id="feedbackBom">Descrição boa</button>
+        <button type="button" id="feedbackRuim">Descrição ruim</button>
+      </div>
+      <label for="feedbackComentario">O que faltou, sobrou ou foi inventado?</label>
+      <textarea id="feedbackComentario"></textarea>
+      <button type="button" id="enviarFeedbackTexto">Enviar feedback com comentário</button>
+    </div>
+  </section>
+
+  <section id="tab-internet" hidden>
+    <h2>Imagens da internet</h2>
+    <p>Cole a URL direta de uma imagem ou a URL de uma página. O backend vai baixar, validar e converter a imagem antes de enviar para a IA.</p>
+    <label for="urlInternet">URL da imagem ou página</label>
+    <input id="urlInternet" type="url" placeholder="https://exemplo.com/imagem.jpg">
+    <div class="actions">
+      <button type="button" id="btnDescreverUrl">Descrever imagem de uma URL</button>
+      <button type="button" id="btnDescreverPagina">Descrever todas as imagens da página</button>
+    </div>
+    <div id="resultadoInternet" class="card resultado" aria-live="polite"></div>
+  </section>
+
+  <section id="tab-documentos" hidden>
+    <h2>Ler documento</h2>
+    <p>Escolha a melhor forma de enviar documento, carta, rótulo, cardápio ou print com texto.</p>
+    <div class="actions">
+      <button type="button" id="btnDocCamera">Tirar foto do documento</button>
+      <button type="button" id="btnDocGaleria">Escolher imagem da galeria</button>
+      <button type="button" id="btnDocArquivo">Escolher arquivo</button>
+    </div>
+    <input id="inputDocCamera" class="sr-only" type="file" accept="image/*" capture="environment">
+    <input id="inputDocGaleria" class="sr-only" type="file" accept="image/*">
+    <input id="inputDocArquivo" class="sr-only" type="file" accept="image/*,.pdf">
+    <div id="resultadoDocumento" class="card resultado" aria-live="polite"></div>
+    <button type="button" id="ouvirDocumento">Ouvir documento</button>
+  </section>
+
+  <section id="tab-locais" hidden>
+    <h2>Locais acessíveis para PcD</h2>
+    <p>Área preservada. Use os endpoints existentes de estabelecimentos.</p>
+  </section>
+
+  <section id="tab-aovivo" hidden>
+    <h2>Câmera ao vivo por voz</h2>
+    <p>A IA descreve o que a câmera vê e fala em voz alta. Você também pode fazer perguntas por voz.</p>
+    <div class="actions">
+      <button type="button" id="btnIniciarAoVivo">Iniciar câmera e descrições ao vivo</button>
+      <button type="button" id="btnPararAoVivo">Parar câmera</button>
+      <button type="button" id="btnPerguntaVoz">Fazer pergunta por voz</button>
+      <button type="button" id="btnRepetirAoVivo">Repetir última descrição</button>
+      <button type="button" id="btnPararVozAoVivo">Parar voz</button>
+    </div>
+    <video id="videoAoVivo" autoplay playsinline muted hidden></video>
+    <canvas id="canvasAoVivo" hidden></canvas>
+    <div id="resultadoAoVivo" class="card resultado" aria-live="polite"></div>
+  </section>
+
+  <section id="tab-conta" hidden>
+    <h2>Minha conta</h2>
+    <div class="actions">
+      <button type="button" id="btnAtualizarConta">Atualizar conta</button>
+      <button type="button" id="btnSair">Sair da conta</button>
+    </div>
+    <div id="dadosConta" class="card" aria-live="polite">Carregando...</div>
+
+    <h3>Meu estilo de descrição</h3>
+    <p>Escreva como você quer que a IA descreva para você. O app também vai mostrar o que aprendeu com seus feedbacks.</p>
+    <label for="estiloDescricao">Como quero que a IA descreva para mim</label>
+    <textarea id="estiloDescricao"></textarea>
+    <button type="button" id="btnSalvarEstilo">Salvar estilo manual</button>
+
+    <h3>O que a IA aprendeu sobre minhas preferências</h3>
+    <textarea id="perfilAprendido" aria-label="Perfil aprendido pela IA"></textarea>
+    <div class="actions">
+      <button type="button" id="btnSalvarPerfilAprendido">Editar e salvar perfil aprendido</button>
+      <button type="button" id="btnApagarAprendizado">Apagar aprendizados</button>
+    </div>
+
+    <h3>Pessoas conhecidas pela IA</h3>
+    <p>Cadastre pessoas aqui para que a IA use essas características nas próximas descrições, sempre com cuidado e sem confirmar identidade quando houver dúvida.</p>
+    <button type="button" id="btnAtualizarPessoas">Atualizar lista de pessoas</button>
+    <div id="listaPessoas" class="card" aria-live="polite"></div>
+    <label for="pessoaNome">Nome da pessoa</label>
+    <input id="pessoaNome" type="text">
+    <label for="pessoaCaracteristicas">Características visuais cadastradas</label>
+    <textarea id="pessoaCaracteristicas"></textarea>
+    <button type="button" id="btnSalvarPessoa">Salvar pessoa</button>
+  </section>
+</main>
+
+<script>
+const API = "";
+let token = localStorage.getItem("descritoria_token") || "";
+let ultimaDescricaoId = null;
+let ultimoTextoFalado = "";
+let ultimoArquivoImagem = null;
+let ws = null;
+let streamAoVivo = null;
+let intervaloAoVivo = null;
+let perguntaAoVivo = "";
+
+const statusEl = document.getElementById("status");
+
+function setStatus(msg) {
+  statusEl.textContent = msg;
+}
+
+async function falar(texto) {
+  if (!texto) return;
+  ultimoTextoFalado = texto;
+
+  window.__descritoriaVozSequencia = (window.__descritoriaVozSequencia || 0) + 1;
+  const minhaSequencia = window.__descritoriaVozSequencia;
+
+  try {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  } catch (e) {}
+
+  try {
+    if (window.__descritoriaAudioAtual) {
+      window.__descritoriaAudioAtual.pause();
+      window.__descritoriaAudioAtual.currentTime = 0;
+      window.__descritoriaAudioAtual.src = "";
+      window.__descritoriaAudioAtual.load();
+      window.__descritoriaAudioAtual = null;
+    }
+  } catch (e) {}
+
+  try {
+    if (window.__descritoriaTtsAbortController) {
+      window.__descritoriaTtsAbortController.abort();
+    }
+  } catch (e) {}
+
+  const controller = new AbortController();
+  window.__descritoriaTtsAbortController = controller;
+
+  try {
+    const resp = await fetch(API + "/tts/xai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texto }),
+      signal: controller.signal
+    });
+
+    if (minhaSequencia !== window.__descritoriaVozSequencia) return;
+
+    if (!resp.ok) {
+      const erro = await resp.text();
+      throw new Error(erro);
+    }
+
+    const blob = await resp.blob();
+
+    if (minhaSequencia !== window.__descritoriaVozSequencia) return;
+
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+
+    window.__descritoriaAudioAtual = audio;
+
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      if (window.__descritoriaAudioAtual === audio) {
+        window.__descritoriaAudioAtual = null;
+      }
+    };
+
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      if (window.__descritoriaAudioAtual === audio) {
+        window.__descritoriaAudioAtual = null;
+      }
+    };
+
+    await audio.play();
+    return;
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      return;
+    }
+    console.warn("Falha na voz da xAI. Usando voz do navegador como fallback.", err);
+  }
+
+  if (minhaSequencia !== window.__descritoriaVozSequencia) return;
+  if (!window.speechSynthesis) return;
+
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(texto);
+  utter.lang = "pt-BR";
+  utter.rate = 0.95;
+  utter.pitch = 1.0;
+  window.speechSynthesis.speak(utter);
+}
+
+function pararVoz() {
+  window.__descritoriaVozSequencia = (window.__descritoriaVozSequencia || 0) + 1;
+
+  try {
+    if (window.__descritoriaTtsAbortController) {
+      window.__descritoriaTtsAbortController.abort();
+      window.__descritoriaTtsAbortController = null;
+    }
+  } catch (e) {}
+
+  try {
+    if (window.__descritoriaAudioAtual) {
+      window.__descritoriaAudioAtual.pause();
+      window.__descritoriaAudioAtual.currentTime = 0;
+      window.__descritoriaAudioAtual.src = "";
+      window.__descritoriaAudioAtual.load();
+      window.__descritoriaAudioAtual = null;
+    }
+  } catch (e) {}
+
+  try {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  } catch (e) {}
+
+  setStatus("Voz parada.");
+}
+
+function authHeaders(extra = {}) {
+  return { ...extra, Authorization: `Bearer ${token}` };
+}
+
+async function apiFetch(url, options = {}) {
+  const headers = options.headers || {};
+  const resp = await fetch(API + url, {
+    ...options,
+    headers: token ? authHeaders(headers) : headers
+  });
+  if (!resp.ok) {
+    let detail = "";
+    try {
+      const data = await resp.json();
+      detail = data.detail || JSON.stringify(data);
+    } catch {
+      detail = await resp.text();
+    }
+    throw new Error(detail || `Erro HTTP ${resp.status}`);
+  }
+  return resp.json();
+}
+
+async function garantirLoginDemo() {
+  if (token) {
+    setStatus("Conectado.");
+    return;
+  }
+
+  const usuarioDemo = {
+    nome: "Daniel Teste",
+    email: "daniel.teste@descritoria.local",
+    senha: "Descritoria123"
+  };
+
+  try {
+    await fetch(API + "/registro", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(usuarioDemo)
+    });
+  } catch (err) {
+    // Se já existir, seguimos para login.
+  }
+
+  try {
+    const resp = await fetch(API + "/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: usuarioDemo.email,
+        senha: usuarioDemo.senha
+      })
+    });
+
+    if (!resp.ok) {
+      throw new Error(await resp.text());
+    }
+
+    const data = await resp.json();
+    token = data.access_token;
+    localStorage.setItem("descritoria_token", token);
+    setStatus("Conectado em conta local de teste.");
+  } catch (err) {
+    setStatus("Não foi possível fazer login automático: " + err.message);
+  }
+}
+
+function abrirAba(nome) {
+  for (const section of document.querySelectorAll("main > section")) {
+    section.hidden = section.id !== `tab-${nome}`;
+  }
+}
+
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.addEventListener("click", () => abrirAba(btn.dataset.tab));
+});
+
+document.getElementById("btnGaleria").addEventListener("click", () => document.getElementById("inputGaleria").click());
+document.getElementById("btnCamera").addEventListener("click", () => document.getElementById("inputCamera").click());
+
+document.getElementById("inputGaleria").addEventListener("change", e => descreverArquivo(e.target.files[0]));
+document.getElementById("inputCamera").addEventListener("change", e => descreverArquivo(e.target.files[0]));
+
+async function descreverArquivo(file) {
+  if (!file) return;
+  ultimoArquivoImagem = file;
+  const form = new FormData();
+  form.append("arquivo", file);
+  form.append("quantidade", "1");
+  setStatus("Enviando imagem para descrição.");
+  try {
+    const data = await apiFetch("/imagens/descrever", { method: "POST", body: form });
+    const texto = data.descricoes?.[0] || "";
+    ultimaDescricaoId = data.id;
+    document.getElementById("textoDescricao").textContent = texto;
+    document.getElementById("resultadoImagem").hidden = false;
+    document.getElementById("respostaPerguntaBox").hidden = true;
+    setStatus("Descrição gerada.");
+    falar(texto);
+  } catch (err) {
+    setStatus("Erro ao descrever imagem: " + err.message);
+  }
+}
+
+document.getElementById("ouvirDescricao").addEventListener("click", () => falar(document.getElementById("textoDescricao").textContent));
+document.getElementById("pararVoz1").addEventListener("click", pararVoz);
+document.getElementById("ouvirResposta").addEventListener("click", () => falar(document.getElementById("respostaPergunta").textContent));
+
+document.getElementById("btnPerguntarImagem").addEventListener("click", async () => {
+  const pergunta = document.getElementById("perguntaImagem").value.trim();
+  if (!ultimaDescricaoId || !pergunta) {
+    setStatus("Faça uma descrição e escreva uma pergunta primeiro.");
+    return;
+  }
+  setStatus("Enviando pergunta.");
+  try {
+    const data = await apiFetch("/imagens/perguntar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ descricao_id: ultimaDescricaoId, pergunta })
+    });
+    document.getElementById("respostaPergunta").textContent = data.resposta || "";
+    document.getElementById("respostaPerguntaBox").hidden = false;
+    setStatus("Resposta gerada.");
+    falar(data.resposta || "");
+  } catch (err) {
+    setStatus("Erro ao perguntar: " + err.message);
+  }
+});
+
+async function enviarFeedback(tipo, comentario = "") {
+  if (!ultimaDescricaoId) {
+    setStatus("Nenhuma descrição para avaliar.");
+    return;
+  }
+  try {
+    const endpoint = tipo === "bom" ? "/feedback/bom" : "/feedback/ruim";
+    const body = tipo === "bom"
+      ? { descricao_id: ultimaDescricaoId, comentario: comentario || undefined }
+      : { descricao_id: ultimaDescricaoId, comentario: comentario || "A descrição não ficou boa." };
+    const data = await apiFetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    setStatus(data.aprendizado || "Feedback enviado.");
+    await carregarEstilo();
+  } catch (err) {
+    setStatus("Erro ao enviar feedback: " + err.message);
+  }
+}
+
+document.getElementById("feedbackBom").addEventListener("click", () => enviarFeedback("bom", document.getElementById("feedbackComentario").value));
+document.getElementById("feedbackRuim").addEventListener("click", () => enviarFeedback("ruim", document.getElementById("feedbackComentario").value));
+document.getElementById("enviarFeedbackTexto").addEventListener("click", () => {
+  const comentario = document.getElementById("feedbackComentario").value.trim();
+  enviarFeedback(comentario ? "ruim" : "bom", comentario);
+});
+
+document.getElementById("btnDescreverUrl").addEventListener("click", async () => {
+  const url = document.getElementById("urlInternet").value.trim();
+  if (!url) return setStatus("Informe uma URL.");
+  setStatus("Descrevendo imagem da internet.");
+  try {
+    const data = await apiFetch("/imagens/descrever-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, quantidade: 1 })
+    });
+    document.getElementById("resultadoInternet").textContent = data.descricoes?.[0] || "";
+    ultimaDescricaoId = data.id;
+    falar(data.descricoes?.[0] || "");
+    setStatus("Imagem da internet descrita.");
+  } catch (err) {
+    document.getElementById("resultadoInternet").textContent = err.message;
+    setStatus("Erro na internet: " + err.message);
+  }
+});
+
+document.getElementById("btnDescreverPagina").addEventListener("click", async () => {
+  const url = document.getElementById("urlInternet").value.trim();
+  if (!url) return setStatus("Informe uma URL.");
+  setStatus("Buscando imagens da página.");
+  try {
+    const data = await apiFetch("/imagens/descrever-pagina", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, limite: 5 })
+    });
+    const texto = data.imagens.map((img, i) => `Imagem ${i + 1}:\n${img.descricao}`).join("\n\n");
+    document.getElementById("resultadoInternet").textContent = texto;
+    falar(`Encontrei e descrevi ${data.total_descritas} imagens. ` + texto);
+    setStatus(`Página processada. ${data.total_descritas} imagens descritas.`);
+  } catch (err) {
+    document.getElementById("resultadoInternet").textContent = err.message;
+    setStatus("Erro ao descrever página: " + err.message);
+  }
+});
+
+document.getElementById("btnDocCamera").addEventListener("click", () => document.getElementById("inputDocCamera").click());
+document.getElementById("btnDocGaleria").addEventListener("click", () => document.getElementById("inputDocGaleria").click());
+document.getElementById("btnDocArquivo").addEventListener("click", () => document.getElementById("inputDocArquivo").click());
+["inputDocCamera", "inputDocGaleria", "inputDocArquivo"].forEach(id => {
+  document.getElementById(id).addEventListener("change", e => lerDocumento(e.target.files[0]));
+});
+
+async function lerDocumento(file) {
+  if (!file) return;
+  const form = new FormData();
+  form.append("arquivo", file);
+  setStatus("Enviando documento.");
+  try {
+    const data = await apiFetch("/documentos/ler", { method: "POST", body: form });
+    document.getElementById("resultadoDocumento").textContent = data.texto || "";
+    setStatus("Documento lido.");
+    falar(data.texto || "");
+  } catch (err) {
+    setStatus("Erro ao ler documento: " + err.message);
+  }
+}
+document.getElementById("ouvirDocumento").addEventListener("click", () => falar(document.getElementById("resultadoDocumento").textContent));
+
+async function iniciarAoVivo() {
+  if (!token) return setStatus("Faça login antes de usar a câmera ao vivo.");
+  try {
+    streamAoVivo = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true });
+    const video = document.getElementById("videoAoVivo");
+    video.srcObject = streamAoVivo;
+    video.hidden = false;
+    await video.play();
+
+    const wsUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/videos/aovivo?token=${encodeURIComponent(token)}`;
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      setStatus("Câmera ao vivo iniciada.");
+      falar("Câmera ao vivo iniciada.");
+      intervaloAoVivo = setInterval(enviarFrameAoVivo, 5000);
+    };
+    ws.onmessage = ev => {
+      const data = JSON.parse(ev.data);
+      if (data.tipo === "descricao") {
+        document.getElementById("resultadoAoVivo").textContent = data.texto;
+        falar(data.texto);
+      } else if (data.mensagem) {
+        setStatus(data.mensagem);
+      }
+    };
+    ws.onerror = () => setStatus("Erro na conexão ao vivo.");
+    ws.onclose = () => setStatus("Câmera ao vivo desconectada.");
+  } catch (err) {
+    setStatus("Não foi possível acessar a câmera. Verifique a permissão do navegador. " + err.message);
+    falar("Não foi possível acessar a câmera. Verifique a permissão do navegador.");
+  }
+}
+
+function enviarFrameAoVivo() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const video = document.getElementById("videoAoVivo");
+  if (!video.videoWidth) return;
+  const canvas = document.getElementById("canvasAoVivo");
+  canvas.width = Math.min(video.videoWidth, 768);
+  canvas.height = Math.round(video.videoHeight * (canvas.width / video.videoWidth));
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const dataUri = canvas.toDataURL("image/jpeg", 0.78);
+  ws.send(JSON.stringify({ tipo: "frame", data_uri: dataUri, pergunta: perguntaAoVivo }));
+  perguntaAoVivo = "";
+}
+
+function pararAoVivo() {
+  if (intervaloAoVivo) clearInterval(intervaloAoVivo);
+  intervaloAoVivo = null;
+  if (ws) ws.close();
+  ws = null;
+  if (streamAoVivo) streamAoVivo.getTracks().forEach(t => t.stop());
+  streamAoVivo = null;
+  document.getElementById("videoAoVivo").hidden = true;
+  setStatus("Câmera ao vivo parada.");
+  falar("Câmera ao vivo parada.");
+}
+
+function perguntarPorVoz() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    setStatus("Reconhecimento de voz não disponível neste navegador.");
+    falar("Reconhecimento de voz não disponível neste navegador.");
+    return;
+  }
+  const rec = new SpeechRecognition();
+  rec.lang = "pt-BR";
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+  rec.onresult = ev => {
+    perguntaAoVivo = ev.results[0][0].transcript;
+    setStatus("Pergunta recebida: " + perguntaAoVivo);
+    falar("Pergunta recebida. Vou responder no próximo frame.");
+    enviarFrameAoVivo();
+  };
+  rec.onerror = () => setStatus("Não consegui ouvir a pergunta.");
+  rec.start();
+  setStatus("Ouvindo pergunta.");
+}
+
+document.getElementById("btnIniciarAoVivo").addEventListener("click", iniciarAoVivo);
+document.getElementById("btnPararAoVivo").addEventListener("click", pararAoVivo);
+document.getElementById("btnPerguntaVoz").addEventListener("click", perguntarPorVoz);
+document.getElementById("btnRepetirAoVivo").addEventListener("click", () => falar(document.getElementById("resultadoAoVivo").textContent || ultimoTextoFalado));
+document.getElementById("btnPararVozAoVivo").addEventListener("click", pararVoz);
+
+async function carregarConta() {
+  try {
+    const perfil = await apiFetch("/usuario/perfil");
+    document.getElementById("dadosConta").textContent = `Nome: ${perfil.nome}. E-mail: ${perfil.email}.`;
+    await carregarEstilo();
+    await carregarPessoas();
+  } catch (err) {
+    document.getElementById("dadosConta").textContent = "Não foi possível carregar conta: " + err.message;
+  }
+}
+
+async function carregarEstilo() {
+  try {
+    const data = await apiFetch("/usuario/estilo-descricao");
+    document.getElementById("estiloDescricao").value = data.estilo || "";
+    document.getElementById("perfilAprendido").value = data.perfil_aprendizado_ia || "";
+  } catch {}
+}
+
+document.getElementById("btnAtualizarConta").addEventListener("click", carregarConta);
+document.getElementById("btnSalvarEstilo").addEventListener("click", async () => {
+  try {
+    await apiFetch("/usuario/estilo-descricao", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ estilo: document.getElementById("estiloDescricao").value })
+    });
+    setStatus("Estilo salvo.");
+  } catch (err) {
+    setStatus("Erro ao salvar estilo: " + err.message);
+  }
+});
+document.getElementById("btnSalvarPerfilAprendido").addEventListener("click", async () => {
+  try {
+    await apiFetch("/usuario/perfil-aprendizado", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ perfil_aprendizado_ia: document.getElementById("perfilAprendido").value })
+    });
+    setStatus("Perfil aprendido salvo.");
+  } catch (err) {
+    setStatus("Erro ao salvar perfil aprendido: " + err.message);
+  }
+});
+document.getElementById("btnApagarAprendizado").addEventListener("click", async () => {
+  try {
+    await apiFetch("/usuario/perfil-aprendizado", { method: "DELETE" });
+    document.getElementById("perfilAprendido").value = "";
+    setStatus("Aprendizados apagados.");
+  } catch (err) {
+    setStatus("Erro ao apagar aprendizados: " + err.message);
+  }
+});
+
+async function carregarPessoas() {
+  try {
+    const pessoas = await apiFetch("/pessoas");
+    document.getElementById("listaPessoas").textContent = pessoas.length
+      ? pessoas.map(p => `${p.nome}: ${p.caracteristicas}`).join("\n\n")
+      : "Nenhuma pessoa cadastrada.";
+  } catch (err) {
+    document.getElementById("listaPessoas").textContent = "Erro ao carregar pessoas: " + err.message;
+  }
+}
+document.getElementById("btnAtualizarPessoas").addEventListener("click", carregarPessoas);
+document.getElementById("btnSalvarPessoa").addEventListener("click", async () => {
+  const nome = document.getElementById("pessoaNome").value.trim();
+  const caracteristicas = document.getElementById("pessoaCaracteristicas").value.trim();
+  if (!nome || !caracteristicas) return setStatus("Informe nome e características.");
+  try {
+    await apiFetch("/pessoas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome, caracteristicas })
+    });
+    setStatus("Pessoa salva.");
+    await carregarPessoas();
+  } catch (err) {
+    setStatus("Erro ao salvar pessoa: " + err.message);
+  }
+});
+
+document.getElementById("btnSair").addEventListener("click", () => {
+  localStorage.removeItem("descritoria_token");
+  token = "";
+  setStatus("Você saiu da conta.");
+});
+
+garantirLoginDemo();
+carregarConta();
+
+// Correção dedicada: botão Ouvir descrição
+function ouvirDescricaoAtual() {
+  const el = document.getElementById("textoDescricao");
+  const texto = ((el && (el.innerText || el.textContent)) || ultimoTextoFalado || "").trim();
+
+  if (!texto) {
+    setStatus("Ainda não há descrição para ouvir.");
+    return;
+  }
+
+  setStatus("Lendo descrição.");
+  falar(texto);
+}
+
+// Amarra o botão Ouvir descrição de forma redundante e segura.
+function configurarBotaoOuvirDescricao() {
+  const btn = document.getElementById("ouvirDescricao");
+  if (!btn) return;
+
+  btn.type = "button";
+  btn.onclick = function(ev) {
+    if (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+    ouvirDescricaoAtual();
+    return false;
+  };
+
+  btn.addEventListener("click", function(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    ouvirDescricaoAtual();
+  }, true);
+}
+
+configurarBotaoOuvirDescricao();
+
+document.addEventListener("click", function(ev) {
+  const alvo = ev.target;
+  if (alvo && alvo.id === "ouvirDescricao") {
+    ev.preventDefault();
+    ev.stopPropagation();
+    ouvirDescricaoAtual();
+  }
+}, true);
+
+</script>
+</body>
+</html>
