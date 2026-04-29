@@ -227,12 +227,20 @@ async def tts_falar(payload: dict):
     if len(texto) > 3500:
         texto = texto[:3500]
 
-    api_key = os.getenv("XAI_TTS_API_KEY") or os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
+    api_key = (
+        os.getenv("XAI_TTS_API_KEY")
+        or os.getenv("GROK_TTS_KEY")
+        or os.getenv("XAI_API_KEY")
+        or os.getenv("GROK_API_KEY")
+    )
     if not api_key:
         raise HTTPException(status_code=500, detail="Chave XAI_TTS_API_KEY ou XAI_API_KEY não configurada.")
 
+    voice_id = os.getenv("XAI_TTS_VOICE", "Eve")
+    texto_para_voz = "[fala em português brasileiro, sotaque do Brasil] " + texto
+
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=90) as client:
             resp = await client.post(
                 "https://api.x.ai/v1/tts",
                 headers={
@@ -241,8 +249,10 @@ async def tts_falar(payload: dict):
                 },
                 json={
                     "text": texto_para_voz,
-                    "voice_id": "eve",
+                    "voice_id": voice_id,
                     "language": "pt-BR",
+                    "codec": "mp3",
+                    "text_normalization": True,
                 },
             )
 
@@ -275,6 +285,7 @@ async def descritoria_tts_xai(payload: dict):
 
     api_key = (
         os.getenv("XAI_TTS_API_KEY")
+        or os.getenv("GROK_TTS_KEY")
         or os.getenv("XAI_API_KEY")
         or os.getenv("GROK_API_KEY")
     )
@@ -285,7 +296,7 @@ async def descritoria_tts_xai(payload: dict):
             detail="Chave XAI_TTS_API_KEY, XAI_API_KEY ou GROK_API_KEY não configurada."
         )
 
-    voice_id = os.getenv("XAI_TTS_VOICE", "eve")
+    voice_id = os.getenv("XAI_TTS_VOICE", "Eve")
 
     texto_para_voz = "[fala em português brasileiro, sotaque do Brasil] " + texto
 
@@ -299,7 +310,7 @@ async def descritoria_tts_xai(payload: dict):
                 },
                 json={
                     "text": texto_para_voz,
-"voice_id": voice_id,
+                    "voice_id": voice_id,
                     "language": "pt-BR",
                     "codec": "mp3",
                     "text_normalization": True,
