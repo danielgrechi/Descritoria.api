@@ -10,9 +10,7 @@ from PIL import Image
 
 app = FastAPI()
 
-REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN")
-if not REPLICATE_API_TOKEN:
-    raise ValueError("A variável de ambiente REPLICATE_API_TOKEN não está definida.")
+REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN", "")
 
 @app.post("/describe")
 async def describe_image(file: UploadFile = File(...)):
