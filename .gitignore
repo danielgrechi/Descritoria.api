@@ -5,3 +5,4 @@ descritoria.db
 *.db
 *.sqlite
 .env
+*.bak_*
