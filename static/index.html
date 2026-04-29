@@ -347,14 +347,14 @@
   async function registrarOuLogin() {
     setStatus('Criando sessão...');
     document.getElementById('btnReconectarDiv').style.display = 'none';
-    const email = 'usuario@descritoria.app';
+    const email = 'danielgrechi@gmail.com';
     const senha = 'Descritoria@2025';
 
     try {
       const r = await fetch(`${API}/auth/registro`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: 'Usuário Descritoria', email, senha })
+        body: JSON.stringify({ nome: 'Daniel', email, senha })
       });
       const d = await r.json();
       if (d.access_token) { salvarToken(d.access_token); return; }
