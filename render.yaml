@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: descritoria-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GROK_API_KEY
+        sync: false
+      - key: XAI_API_KEY
+        sync: false
+      - key: XAI_TTS_API_KEY
+        sync: false
+      - key: REPLICATE_API_TOKEN
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11.0"
