@@ -412,6 +412,16 @@ def salvar_descricao(
     return {"mensagem": "Descrição salva com sucesso."}
 
 
+def _limpar_url(url: str) -> str:
+    """Remove URLs extras coladas juntas e decodifica %20 entre URLs."""
+    url = url.strip()
+    # Remove tudo após espaço ou %20 seguido de http
+    for sep in [" http", "%20http", "\nhttp", "\thttp"]:
+        if sep in url:
+            url = url[:url.index(sep)]
+    return url.strip()
+
+
 class DescricaoUrlRequest(BaseModel):
     url: str = Field(..., min_length=8, max_length=2000)
     quantidade: int = 1
@@ -423,7 +433,8 @@ async def descrever_imagem_url(
     db: Session = Depends(get_db),
     usuario: models.Usuario = Depends(obter_usuario_atual),
 ):
-    dados, mime_type, url_final = await baixar_imagem_validada(body.url)
+    url_limpa = _limpar_url(body.url)
+    dados, mime_type, url_final = await baixar_imagem_validada(url_limpa)
     data_uri = imagem_para_data_uri(dados, mime_type)
     prompt_final = _prompt_final(usuario, db)
 
@@ -564,9 +575,10 @@ async def descrever_imagens_pagina(
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
     }
 
+    url_pagina = _limpar_url(body.url)
     try:
         async with httpx.AsyncClient(timeout=25, follow_redirects=True, headers=headers_pagina) as client:
-            resp = await client.get(body.url)
+            resp = await client.get(url_pagina)
             resp.raise_for_status()
             html = resp.text
             url_base = str(resp.url)
