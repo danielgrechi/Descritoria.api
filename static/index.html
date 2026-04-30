@@ -1,1082 +1,821 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Descritoria</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0a0a0a;
-      color: #f0f0f0;
-      padding: 20px;
-      font-size: 18px;
-      line-height: 1.6;
-      max-width: 680px;
-      margin: 0 auto;
-    }
-    h1 { font-size: 32px; font-weight: 700; text-align: center; margin-bottom: 4px; color: #fff; }
-    .subtitulo { text-align: center; color: #888; margin-bottom: 24px; font-size: 15px; }
-    section { background: #1a1a1a; border-radius: 16px; padding: 20px; margin-bottom: 20px; }
-    h2 { font-size: 20px; margin-bottom: 14px; color: #e0e0e0; }
-    button {
-      display: block; width: 100%; padding: 18px 16px;
-      font-size: 18px; font-weight: 600; border: none; border-radius: 12px;
-      cursor: pointer; margin-bottom: 10px; text-align: center;
-    }
-    .btn-azul { background: #007AFF; color: #fff; }
-    .btn-verde { background: #30D158; color: #fff; }
-    .btn-laranja { background: #FF9F0A; color: #fff; }
-    .btn-roxo { background: #BF5AF2; color: #fff; }
-    .btn-vermelho { background: #FF453A; color: #fff; }
-    .btn-cinza { background: #3a3a3c; color: #fff; }
-    button:active { opacity: 0.8; }
-    input[type="file"] { display: none; }
-    input[type="text"], textarea {
-      width: 100%; padding: 14px; font-size: 16px;
-      background: #2c2c2e; color: #fff; border: 1px solid #3a3a3c;
-      border-radius: 10px; margin-bottom: 10px;
-    }
-    .resultado {
-      background: #2c2c2e; border-radius: 12px; padding: 16px;
-      margin-top: 12px; font-size: 17px; line-height: 1.7;
-      min-height: 60px; color: #f0f0f0;
-    }
-    .status { color: #888; font-size: 15px; font-style: italic; margin-top: 8px; min-height: 22px; }
-    .nav { display: flex; gap: 8px; margin-bottom: 20px; overflow-x: auto; }
-    .nav button {
-      flex: 0 0 auto; width: auto; padding: 10px 16px;
-      font-size: 15px; border-radius: 20px; margin: 0;
-    }
-    .nav button.ativo { background: #007AFF; color: #fff; }
-    .nav button:not(.ativo) { background: #2c2c2e; color: #aaa; }
-    .aba { display: none; }
-    .aba.ativa { display: block; }
-    .linha { display: flex; gap: 10px; }
-    .linha button { flex: 1; }
-    .destaque {
-      background: #1c3a5e; border-radius: 10px; padding: 12px;
-      margin-bottom: 10px; font-size: 15px; color: #90c8ff;
-    }
-    .erro { color: #FF453A; }
-    .ok { color: #30D158; }
-    #statusGlobal {
-      text-align: center; font-size: 14px; color: #888;
-      margin-bottom: 16px; min-height: 20px;
-    }
+    :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; line-height: 1.5; }
+    header, main { max-width: 920px; margin: 0 auto; padding: 1rem; }
+    nav { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
+    button, input, textarea, select { font: inherit; min-height: 44px; }
+    button { padding: .7rem 1rem; border-radius: .75rem; border: 1px solid currentColor; cursor: pointer; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: .75rem; border-radius: .75rem; border: 1px solid #777; margin: .35rem 0 1rem; }
+    textarea { min-height: 110px; }
+    section[hidden] { display: none; }
+    .card { border: 1px solid #777; border-radius: 1rem; padding: 1rem; margin: 1rem 0; }
+    .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
+    .status { padding: .75rem; border-radius: .75rem; border: 1px solid #777; margin: 1rem 0; }
+    .resultado { white-space: pre-wrap; font-size: 1.05rem; }
+    video, canvas { max-width: 100%; border-radius: 1rem; }
+    .sr-only { position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden; }
   </style>
 </head>
 <body>
+<header>
+  <h1>Descritoria</h1>
+  <p>Acessibilidade visual com inteligência artificial.</p>
+  <div id="status" class="status" role="status" aria-live="polite">Carregando app.</div>
+  <nav aria-label="Navegação principal">
+    <button type="button" data-tab="camera">Câmera</button>
+    <button type="button" data-tab="internet">Internet</button>
+    <button type="button" data-tab="documentos">Documento</button>
+    <button type="button" data-tab="locais">Locais</button>
+    <button type="button" data-tab="aovivo">Ao Vivo</button>
+    <button type="button" data-tab="conta">Conta</button>
+  </nav>
+</header>
 
-<h1>Descritoria</h1>
-<p class="subtitulo">Acessibilidade visual com inteligência artificial</p>
-<div id="statusGlobal" aria-live="polite">Conectando...</div>
-<div id="btnReconectarDiv" style="display:none;text-align:center;margin-bottom:12px;">
-  <button class="btn-azul" onclick="reconectar()" style="width:auto;padding:12px 24px;" aria-label="Tentar reconectar ao servidor">🔄 Reconectar</button>
-</div>
+<main>
+  <section id="tab-camera">
+    <h2>Descrever imagem</h2>
+    <p>Escolha uma foto da galeria ou tire uma foto com a câmera. A IA vai gerar uma descrição única, em português, sem inventar elementos.</p>
 
-<!-- Navegação por abas -->
-<nav class="nav" role="tablist" aria-label="Seções do aplicativo">
-  <button class="ativo" onclick="trocarAba('imagens', this)" role="tab" aria-selected="true">📷 Imagens</button>
-  <button onclick="trocarAba('internet', this)" role="tab">🌐 Internet</button>
-  <button onclick="trocarAba('pessoas', this)" role="tab">🧠 Pessoas</button>
-  <button onclick="trocarAba('documentos', this)" role="tab">📄 Documentos</button>
-  <button onclick="trocarAba('estabelecimentos', this)" role="tab">🏪 Locais</button>
-  <button onclick="trocarAba('aovivo', this)" role="tab">🎥 Ao Vivo</button>
-  <button onclick="trocarAba('conta', this)" role="tab">👤 Conta</button>
-</nav>
-
-<!-- ABA: IMAGENS -->
-<div id="aba-imagens" class="aba ativa" role="tabpanel">
-  <section aria-label="Descrever imagem">
-    <h2>📷 Descrever Imagem</h2>
-    <p style="color:#888;margin-bottom:14px;font-size:15px">Escolha uma foto da galeria ou tire uma foto com a câmera. A IA vai descrever tudo em português.</p>
-
-    <input type="file" id="arquivoImagem" accept="image/*" onchange="previewImagem()" />
-
-    <div class="linha">
-      <button class="btn-azul" onclick="document.getElementById('arquivoImagem').click()" aria-label="Escolher foto da galeria">
-        🖼 Galeria
-      </button>
-      <button class="btn-verde" onclick="abrirCamera()" aria-label="Tirar foto com câmera">
-        📷 Câmera
-      </button>
+    <div class="actions">
+      <button type="button" id="btnGaleria">Escolher foto da galeria</button>
+      <button type="button" id="btnCamera">Tirar foto com a câmera</button>
     </div>
 
-    <input type="file" id="arquivoCamera" accept="image/*" capture="environment" onchange="usarFotoCamera()" />
+    <input id="inputGaleria" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/*">
+    <input id="inputCamera" class="sr-only" type="file" accept="image/*" capture="environment">
 
-    <div id="previewArea" style="display:none;margin-bottom:10px;">
-      <img id="previewImg" src="" alt="Foto selecionada" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover;" />
-    </div>
-
-    <div class="linha">
-      <button class="btn-azul" onclick="descreverImagem(1)" aria-label="Gerar 1 descrição">1 Descrição</button>
-      <button class="btn-cinza" onclick="descreverImagem(3)" aria-label="Gerar 3 descrições diferentes">3 Versões</button>
-    </div>
-
-    <div class="status" id="statusImagem" aria-live="polite"></div>
-
-    <div id="resultadoImagem" class="resultado" aria-live="polite" style="display:none"></div>
-
-    <div id="botoesPosFoto" style="display:none;">
-      <button class="btn-laranja" onclick="lerEmVoz('imagem')" aria-label="Ler descrição em voz alta">🔊 Ouvir Descrição</button>
-      <button class="btn-cinza" onclick="pararVoz()" aria-label="Parar leitura">⏹ Parar</button>
-    </div>
-
-    <!-- PAINEL PÓS-DESCRIÇÃO: aparece após a IA descrever -->
-    <div id="painelPosDescricao" style="display:none; margin-top:16px;">
-
-      <!-- Feedback -->
-      <div style="background:#2c2c2e;border-radius:12px;padding:16px;margin-bottom:12px;">
-        <h2 style="font-size:17px;margin-bottom:10px;">O que você achou desta descrição?</h2>
-        <div class="linha">
-          <button class="btn-verde" onclick="enviarFeedbackBom()" aria-label="Marcar descrição como boa">👍 Boa</button>
-          <button class="btn-vermelho" onclick="mostrarFormRuim()" aria-label="Marcar descrição como ruim">👎 Ruim</button>
-        </div>
-        <div id="formFeedbackRuim" style="display:none;margin-top:10px;">
-          <label for="comentarioRuim" style="display:block;margin-bottom:6px;color:#aaa;font-size:14px;">O que faltou ou o que você queria diferente? (a IA aprende com isso)</label>
-          <textarea id="comentarioRuim" rows="3" placeholder="Ex: descreva mais detalhes do corpo, seja mais direto, inclua cores..." aria-label="Comentário sobre o que melhorar"></textarea>
-          <button class="btn-azul" onclick="enviarFeedbackRuim()" aria-label="Enviar feedback negativo">Enviar</button>
-        </div>
-        <div class="status" id="statusFeedback" aria-live="polite"></div>
+    <div id="resultadoImagem" class="card" aria-live="polite" hidden>
+      <h3>Descrição</h3>
+      <div id="textoDescricao" class="resultado"></div>
+      <div class="actions">
+        <button type="button" id="ouvirDescricao" onclick="ouvirDescricaoAtual()">Ouvir descrição</button>
+        <button type="button" id="pararVoz1">Parar voz</button>
       </div>
 
-      <!-- Pergunta inline -->
-      <div style="background:#2c2c2e;border-radius:12px;padding:16px;margin-bottom:12px;">
-        <h2 style="font-size:17px;margin-bottom:10px;">❓ Pergunte sobre esta imagem</h2>
-        <textarea id="perguntaTexto" rows="2" placeholder="Ex: Qual a cor do cabelo dela? Tem texto? O que tem ao fundo?" aria-label="Digite sua pergunta sobre a imagem"></textarea>
-        <button class="btn-azul" onclick="perguntarSobreImagem()" aria-label="Enviar pergunta">Perguntar</button>
-        <div class="status" id="statusPergunta" aria-live="polite"></div>
-        <div id="resultadoPergunta" class="resultado" aria-live="polite" style="display:none"></div>
-        <button id="btnOuvirResposta" class="btn-laranja" onclick="lerEmVoz('pergunta')" style="display:none" aria-label="Ouvir resposta em voz alta">🔊 Ouvir Resposta</button>
+      <h3>Pergunte sobre esta imagem</h3>
+      <label for="perguntaImagem">Digite sua pergunta</label>
+      <textarea id="perguntaImagem" placeholder="Exemplo: há texto visível? O que está no canto esquerdo?"></textarea>
+      <button type="button" id="btnPerguntarImagem">Perguntar</button>
+
+      <div id="respostaPerguntaBox" class="card" aria-live="polite" hidden>
+        <h4>Resposta</h4>
+        <div id="respostaPergunta" class="resultado"></div>
+        <button type="button" id="ouvirResposta">Ouvir resposta</button>
       </div>
 
-      <!-- Nomear pessoa -->
-      <div style="background:#2c2c2e;border-radius:12px;padding:16px;margin-bottom:12px;">
-        <h2 style="font-size:17px;margin-bottom:10px;">🧠 Nomear pessoa da imagem</h2>
-        <p style="color:#aaa;font-size:14px;margin-bottom:10px;">Se houver alguém que você queira que a IA reconheça em imagens futuras, dê um nome. A descrição atual será usada como característica.</p>
-        <input type="text" id="nomePessoaImg" placeholder="Nome da pessoa" aria-label="Nome da pessoa para salvar na memória" />
-        <button class="btn-roxo" onclick="nomearPessoaDaImagem()" aria-label="Salvar pessoa na memória">💾 Salvar na memória</button>
-        <div class="status" id="statusNomearPessoa" aria-live="polite"></div>
+      <h3>Feedback da descrição</h3>
+      <p>Seu feedback ajuda a IA a aprender seu estilo de descrição.</p>
+      <div class="actions">
+        <button type="button" id="feedbackBom">Descrição boa</button>
+        <button type="button" id="feedbackRuim">Descrição ruim</button>
       </div>
-
+      <label for="feedbackComentario">O que faltou, sobrou ou foi inventado?</label>
+      <textarea id="feedbackComentario"></textarea>
+      <button type="button" id="enviarFeedbackTexto">Enviar feedback com comentário</button>
     </div>
   </section>
-</div>
 
-<!-- ABA: INTERNET -->
-<div id="aba-internet" class="aba" role="tabpanel">
-  <section aria-label="Descrever imagens da internet">
-    <h2>🌐 Imagens da Internet</h2>
-    <p style="color:#888;margin-bottom:14px;font-size:15px">Cole a URL de uma imagem para descrevê-la, ou a URL de um site para descrever todas as imagens da página.</p>
+  <section id="tab-internet" hidden>
+    <h2>Imagens da internet</h2>
+    <p>Cole a URL direta de uma imagem ou a URL de uma página. O backend vai baixar, validar e converter a imagem antes de enviar para a IA.</p>
+    <label for="urlInternet">URL da imagem ou página</label>
+    <input id="urlInternet" type="url" placeholder="https://exemplo.com/imagem.jpg">
+    <div class="actions">
+      <button type="button" id="btnDescreverUrl">Descrever imagem de uma URL</button>
+      <button type="button" id="btnDescreverPagina">Descrever todas as imagens da página</button>
+    </div>
+    <div id="resultadoInternet" class="card resultado" aria-live="polite"></div>
+  </section>
 
-    <label for="urlInternet" style="display:block;margin-bottom:6px;color:#aaa;">URL da imagem ou página:</label>
-    <input type="text" id="urlInternet" placeholder="https://..." aria-label="URL da imagem ou página" />
+  <section id="tab-documentos" hidden>
+    <h2>Ler documento</h2>
+    <p>Escolha a melhor forma de enviar documento, carta, rótulo, cardápio ou print com texto.</p>
+    <div class="actions">
+      <button type="button" id="btnDocCamera">Tirar foto do documento</button>
+      <button type="button" id="btnDocGaleria">Escolher imagem da galeria</button>
+      <button type="button" id="btnDocArquivo">Escolher arquivo</button>
+    </div>
+    <input id="inputDocCamera" class="sr-only" type="file" accept="image/*" capture="environment">
+    <input id="inputDocGaleria" class="sr-only" type="file" accept="image/*">
+    <input id="inputDocArquivo" class="sr-only" type="file" accept="image/*,.pdf">
+    <div id="resultadoDocumento" class="card resultado" aria-live="polite"></div>
+    <button type="button" id="ouvirDocumento">Ouvir documento</button>
+  </section>
 
-    <div class="linha">
-      <button class="btn-azul" onclick="descreverUrlImagem()" aria-label="Descrever imagem de uma URL">🖼 Imagem única</button>
-      <button class="btn-roxo" onclick="descreverPagina()" aria-label="Descrever todas as imagens de uma página">🌐 Página inteira</button>
+  <section id="tab-locais" hidden>
+    <h2>Locais acessíveis para PcD</h2>
+    <p>Área preservada. Use os endpoints existentes de estabelecimentos.</p>
+  </section>
+
+  <section id="tab-aovivo" hidden>
+    <h2>Câmera ao vivo por voz</h2>
+    <p>A IA descreve o que a câmera vê e fala em voz alta. Você também pode fazer perguntas por voz.</p>
+    <div class="actions">
+      <button type="button" id="btnIniciarAoVivo">Iniciar câmera e descrições ao vivo</button>
+      <button type="button" id="btnPararAoVivo">Parar câmera</button>
+      <button type="button" id="btnPerguntaVoz">Fazer pergunta por voz</button>
+      <button type="button" id="btnRepetirAoVivo">Repetir última descrição</button>
+      <button type="button" id="btnPararVozAoVivo">Parar voz</button>
+    </div>
+    <video id="videoAoVivo" autoplay playsinline muted hidden></video>
+    <canvas id="canvasAoVivo" hidden></canvas>
+    <div id="resultadoAoVivo" class="card resultado" aria-live="polite"></div>
+  </section>
+
+  <section id="tab-conta" hidden>
+    <h2>Minha conta</h2>
+    <div class="actions">
+      <button type="button" id="btnAtualizarConta">Atualizar conta</button>
+      <button type="button" id="btnSair">Sair da conta</button>
+    </div>
+    <div id="dadosConta" class="card" aria-live="polite">Carregando...</div>
+
+    <h3>Meu estilo de descrição</h3>
+    <p>Escreva como você quer que a IA descreva para você. O app também vai mostrar o que aprendeu com seus feedbacks.</p>
+    <label for="estiloDescricao">Como quero que a IA descreva para mim</label>
+    <textarea id="estiloDescricao"></textarea>
+    <button type="button" id="btnSalvarEstilo">Salvar estilo manual</button>
+
+    <h3>O que a IA aprendeu sobre minhas preferências</h3>
+    <textarea id="perfilAprendido" aria-label="Perfil aprendido pela IA"></textarea>
+    <div class="actions">
+      <button type="button" id="btnSalvarPerfilAprendido">Editar e salvar perfil aprendido</button>
+      <button type="button" id="btnApagarAprendizado">Apagar aprendizados</button>
     </div>
 
-    <div class="status" id="statusInternet" aria-live="polite"></div>
-    <div id="resultadoInternet" aria-live="polite"></div>
+    <h3>Pessoas conhecidas pela IA</h3>
+    <p>Cadastre pessoas aqui para que a IA use essas características nas próximas descrições, sempre com cuidado e sem confirmar identidade quando houver dúvida.</p>
+    <button type="button" id="btnAtualizarPessoas">Atualizar lista de pessoas</button>
+    <div id="listaPessoas" class="card" aria-live="polite"></div>
+    <label for="pessoaNome">Nome da pessoa</label>
+    <input id="pessoaNome" type="text">
+    <label for="pessoaCaracteristicas">Características visuais cadastradas</label>
+    <textarea id="pessoaCaracteristicas"></textarea>
+    <button type="button" id="btnSalvarPessoa">Salvar pessoa</button>
   </section>
-</div>
-
-<!-- ABA: PESSOAS -->
-<div id="aba-pessoas" class="aba" role="tabpanel">
-  <section aria-label="Pessoas conhecidas">
-    <h2>🧠 Pessoas na Memória</h2>
-    <p style="color:#888;margin-bottom:14px;font-size:15px">A IA reconhece essas pessoas pelas características salvas e usa os nomes nas descrições.</p>
-
-    <button class="btn-azul" onclick="carregarPessoas()" aria-label="Atualizar lista">🔄 Atualizar Lista</button>
-    <div class="status" id="statusPessoas" aria-live="polite"></div>
-    <div id="listaPessoas" aria-live="polite"></div>
-
-    <hr style="border-color:#3a3a3c;margin:20px 0;" />
-
-    <h2 style="font-size:17px;">Adicionar Pessoa</h2>
-    <input type="text" id="novaPessoaNome" placeholder="Nome (ex: Maria, João...)" aria-label="Nome da pessoa" />
-    <textarea id="novaPessoaCaract" rows="4" placeholder="Características físicas (ex: mulher, cabelo castanho longo, olhos verdes, 1,70m, pele clara, usa óculos...)" aria-label="Características físicas da pessoa"></textarea>
-    <button class="btn-verde" onclick="adicionarPessoa()" aria-label="Salvar pessoa">💾 Salvar</button>
-    <div class="status" id="statusNovaPessoa" aria-live="polite"></div>
-  </section>
-</div>
-
-<!-- ABA: DOCUMENTOS -->
-<div id="aba-documentos" class="aba" role="tabpanel">
-  <section aria-label="Ler documento">
-    <h2>📄 Ler Documento</h2>
-    <p style="color:#888;margin-bottom:14px;font-size:15px">Tire foto de um documento, carta, cardápio, rótulo ou qualquer texto. A IA vai extrair e ler o conteúdo.</p>
-
-    <input type="file" id="arquivoDocumento" accept="image/*" capture="environment" onchange="previewDocumento()" />
-
-    <div class="linha">
-      <button class="btn-azul" onclick="document.getElementById('arquivoDocumento').click()" aria-label="Escolher ou fotografar documento">
-        📄 Escolher Documento
-      </button>
-    </div>
-
-    <div id="previewDocArea" style="display:none;margin-bottom:10px;">
-      <img id="previewDocImg" src="" alt="Documento selecionado" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover;" />
-    </div>
-
-    <button class="btn-verde" onclick="lerDocumento()" aria-label="Extrair e ler texto do documento">📖 Ler Documento</button>
-
-    <div class="status" id="statusDocumento" aria-live="polite"></div>
-    <div id="resultadoDocumento" class="resultado" aria-live="polite" style="display:none"></div>
-    <button id="btnOuvirDocumento" class="btn-laranja" onclick="lerEmVoz('documento')" style="display:none" aria-label="Ouvir conteúdo do documento">🔊 Ouvir Documento</button>
-  </section>
-</div>
-
-<!-- ABA: ESTABELECIMENTOS -->
-<div id="aba-estabelecimentos" class="aba" role="tabpanel">
-  <section aria-label="Locais acessíveis">
-    <h2>🏪 Locais Acessíveis para PcD</h2>
-    <p style="color:#888;margin-bottom:14px;font-size:15px">Encontre estabelecimentos que acolhem pessoas com deficiência.</p>
-
-    <input type="text" id="buscaLocal" placeholder="Buscar por nome ou categoria..." aria-label="Buscar estabelecimento" />
-    <button class="btn-azul" onclick="buscarEstabelecimentos()" aria-label="Buscar locais">🔍 Buscar</button>
-
-    <div class="status" id="statusLocais" aria-live="polite"></div>
-    <div id="resultadoLocais" aria-live="polite"></div>
-
-    <hr style="border-color:#3a3a3c;margin:20px 0;" />
-
-    <h2 style="font-size:17px;">Cadastrar Novo Local</h2>
-    <input type="text" id="nomeLocal" placeholder="Nome do estabelecimento" aria-label="Nome do local" />
-    <input type="text" id="categoriaLocal" placeholder="Categoria (ex: Restaurante, Banco, Hospital)" aria-label="Categoria" />
-    <input type="text" id="enderecoLocal" placeholder="Endereço completo" aria-label="Endereço" />
-    <textarea id="descricaoLocal" rows="2" placeholder="Descreva as facilidades de acessibilidade..." aria-label="Descrição das facilidades"></textarea>
-    <button class="btn-verde" onclick="cadastrarLocal()" aria-label="Cadastrar este local">✅ Cadastrar Local</button>
-    <div class="status" id="statusCadastroLocal" aria-live="polite"></div>
-  </section>
-</div>
-
-<!-- ABA: AO VIVO -->
-<div id="aba-aovivo" class="aba" role="tabpanel">
-  <section aria-label="Câmera ao vivo">
-    <h2>🎥 Câmera ao Vivo</h2>
-    <p style="color:#888;margin-bottom:14px;font-size:15px">A IA descreve o que a câmera vê a cada 5 segundos, em voz alta. Use para explorar ambientes, ler placas ou identificar objetos à sua frente.</p>
-
-    <video id="videoAoVivo" autoplay playsinline muted
-      style="display:none;width:100%;border-radius:12px;max-height:220px;object-fit:cover;margin-bottom:12px;"
-      aria-label="Visualização da câmera"></video>
-    <canvas id="canvasCaptura" style="display:none"></canvas>
-
-    <label for="perguntaAoVivo" style="display:block;margin-bottom:6px;color:#aaa;font-size:14px;">Pergunta opcional (ex: "O que tem na minha frente?" "Tem texto visível?")</label>
-    <input type="text" id="perguntaAoVivo" placeholder="Deixe vazio para descrição geral..." aria-label="Pergunta para a câmera ao vivo" />
-
-    <div class="linha">
-      <button class="btn-verde" id="btnIniciarCamera" onclick="iniciarCameraAoVivo()" aria-label="Iniciar câmera e descrições ao vivo">▶ Iniciar</button>
-      <button class="btn-vermelho" id="btnPararCamera" onclick="pararCameraAoVivo()" style="display:none" aria-label="Parar câmera">⏹ Parar</button>
-    </div>
-
-    <div class="status" id="statusAoVivo" aria-live="polite"></div>
-
-    <div id="resultadoAoVivo" class="resultado" role="status" aria-live="assertive" style="display:none;margin-top:12px;font-size:17px;"></div>
-
-    <button id="btnOuvirAoVivo" class="btn-laranja" onclick="pararVoz()" style="display:none;margin-top:8px" aria-label="Parar leitura em voz">⏹ Parar Voz</button>
-  </section>
-</div>
-
-<!-- ABA: CONTA -->
-<div id="aba-conta" class="aba" role="tabpanel">
-  <section aria-label="Sua conta">
-    <h2>👤 Minha Conta</h2>
-
-    <div id="infoConta" class="resultado" aria-live="polite">Carregando...</div>
-
-    <button class="btn-azul" onclick="carregarPerfil()" style="margin-top:10px" aria-label="Atualizar informações da conta">🔄 Atualizar</button>
-
-    <hr style="border-color:#3a3a3c;margin:20px 0;" />
-
-    <h2 style="font-size:17px;">Saldo PerceptMoney</h2>
-    <div id="infoSaldo" class="resultado" aria-live="polite">—</div>
-    <button class="btn-verde" onclick="carregarSaldo()" style="margin-top:10px" aria-label="Ver saldo">💰 Ver Saldo</button>
-
-    <hr style="border-color:#3a3a3c;margin:20px 0;" />
-
-    <h2 style="font-size:17px;">Meu Estilo de Descrição</h2>
-    <p style="color:#888;margin-bottom:10px;font-size:14px">Diga à IA como você prefere receber as descrições. Ex: "seja mais detalhado com o corpo", "use linguagem informal", "inclua sempre as cores", "descreva a nudez sem censura".</p>
-    <textarea id="estiloDescricao" rows="5" placeholder="Suas preferências para a IA..." aria-label="Estilo personalizado de descrição"></textarea>
-    <button class="btn-azul" onclick="salvarEstilo()" aria-label="Salvar estilo">💾 Salvar Estilo</button>
-    <button class="btn-cinza" onclick="carregarEstilo()" aria-label="Recarregar estilo atual">🔄 Recarregar</button>
-    <div class="status" id="statusEstilo" aria-live="polite"></div>
-
-    <hr style="border-color:#3a3a3c;margin:20px 0;" />
-
-    <h2 style="font-size:17px;">Sair da Conta</h2>
-    <button class="btn-vermelho" onclick="sair()" aria-label="Sair e desconectar">🚪 Sair</button>
-  </section>
-</div>
+</main>
 
 <script>
-  const API = '';
-  let token = localStorage.getItem('descritoria_token');
-  let ultimaDescricaoId = null;
-  let ultimoTextoImagem = '';
-  let ultimoTextoPergunta = '';
-  let ultimoTextoDocumento = '';
+const API = "";
+let token = localStorage.getItem("descritoria_token") || "";
+let ultimaDescricaoId = null;
+let ultimoTextoFalado = "";
+let ultimoArquivoImagem = null;
+let ws = null;
+let streamAoVivo = null;
+let intervaloAoVivo = null;
+let perguntaAoVivo = "";
 
-  // ── Inicialização ─────────────────────────────────────────────────────────
+const statusEl = document.getElementById("status");
 
-  async function inicializar() {
-    setStatus('Verificando conexão...');
-    if (!token) {
-      await registrarOuLogin();
-    } else {
-      try {
-        const r = await fetch(`${API}/usuario/perfil`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!r.ok) {
-          localStorage.removeItem('descritoria_token');
-          token = null;
-          await registrarOuLogin();
-        } else {
-          setStatus('Conectado ✓', 'ok');
-        }
-      } catch {
-        setStatus('Erro de conexão com o servidor', 'erro');
-      }
+function setStatus(msg) {
+  statusEl.textContent = msg;
+}
+
+async function falar(texto) {
+  if (!texto) return;
+  ultimoTextoFalado = texto;
+
+  window.__descritoriaVozSequencia = (window.__descritoriaVozSequencia || 0) + 1;
+  const minhaSequencia = window.__descritoriaVozSequencia;
+
+  try {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
-  }
+  } catch (e) {}
 
-  async function registrarOuLogin() {
-    setStatus('Criando sessão...');
-    document.getElementById('btnReconectarDiv').style.display = 'none';
-    const email = 'danielgrechi@gmail.com';
-    const senha = 'Descritoria@2025';
-
-    try {
-      const r = await fetch(`${API}/auth/registro`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: 'Daniel', email, senha })
-      });
-      const d = await r.json();
-      if (d.access_token) { salvarToken(d.access_token); return; }
-    } catch {}
-
-    try {
-      const r = await fetch(`${API}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, senha })
-      });
-      const d = await r.json();
-      if (d.access_token) { salvarToken(d.access_token); return; }
-      setStatus('Erro ao conectar: ' + (d.detail || 'verifique o servidor'), 'erro');
-      document.getElementById('btnReconectarDiv').style.display = 'block';
-    } catch (e) {
-      setStatus('Servidor não encontrado. Toque em Reconectar.', 'erro');
-      document.getElementById('btnReconectarDiv').style.display = 'block';
+  try {
+    if (window.__descritoriaAudioAtual) {
+      window.__descritoriaAudioAtual.pause();
+      window.__descritoriaAudioAtual.currentTime = 0;
+      window.__descritoriaAudioAtual.src = "";
+      window.__descritoriaAudioAtual.load();
+      window.__descritoriaAudioAtual = null;
     }
-  }
+  } catch (e) {}
 
-  async function reconectar() {
-    localStorage.removeItem('descritoria_token');
-    token = null;
-    document.getElementById('btnReconectarDiv').style.display = 'none';
-    await inicializar();
-  }
-
-  // Renova token automaticamente quando API retorna 401
-  async function fetchComAuth(url, options = {}) {
-    if (!token) await registrarOuLogin();
-    options.headers = { ...(options.headers || {}), Authorization: `Bearer ${token}` };
-    let r = await fetch(url, options);
-    if (r.status === 401) {
-      localStorage.removeItem('descritoria_token');
-      token = null;
-      await registrarOuLogin();
-      if (!token) return r;
-      options.headers.Authorization = `Bearer ${token}`;
-      r = await fetch(url, options);
+  try {
+    if (window.__descritoriaTtsAbortController) {
+      window.__descritoriaTtsAbortController.abort();
     }
-    return r;
-  }
+  } catch (e) {}
 
-  function salvarToken(t) {
-    token = t;
-    localStorage.setItem('descritoria_token', t);
-    setStatus('Conectado ✓', 'ok');
-  }
+  const controller = new AbortController();
+  window.__descritoriaTtsAbortController = controller;
 
-  function setStatus(msg, tipo) {
-    const el = document.getElementById('statusGlobal');
-    el.textContent = msg;
-    el.className = tipo === 'erro' ? 'erro' : tipo === 'ok' ? 'ok' : '';
-  }
+  try {
+    const resp = await fetch(API + "/tts/xai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texto }),
+      signal: controller.signal
+    });
 
-  // ── Navegação ─────────────────────────────────────────────────────────────
+    if (minhaSequencia !== window.__descritoriaVozSequencia) return;
 
-  function trocarAba(nome, btn) {
-    document.querySelectorAll('.aba').forEach(a => a.classList.remove('ativa'));
-    document.querySelectorAll('.nav button').forEach(b => { b.classList.remove('ativo'); b.setAttribute('aria-selected', 'false'); });
-    document.getElementById('aba-' + nome).classList.add('ativa');
-    btn.classList.add('ativo');
-    btn.setAttribute('aria-selected', 'true');
-
-    if (nome === 'conta') { carregarPerfil(); carregarEstilo(); }
-    if (nome === 'estabelecimentos') buscarEstabelecimentos();
-    if (nome === 'pessoas') carregarPessoas();
-  }
-
-  // ── Imagens ───────────────────────────────────────────────────────────────
-
-  function abrirCamera() {
-    document.getElementById('arquivoCamera').click();
-  }
-
-  function usarFotoCamera() {
-    const file = document.getElementById('arquivoCamera').files[0];
-    if (!file) return;
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    document.getElementById('arquivoImagem').files = dt.files;
-    previewImagem();
-  }
-
-  function previewImagem() {
-    const file = document.getElementById('arquivoImagem').files[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    document.getElementById('previewImg').src = url;
-    document.getElementById('previewArea').style.display = 'block';
-  }
-
-  async function descreverImagem(qtd = 1) {
-    const input = document.getElementById('arquivoImagem');
-    if (!input.files[0]) { alert('Escolha uma foto primeiro.'); return; }
-
-    const st = document.getElementById('statusImagem');
-    const res = document.getElementById('resultadoImagem');
-    const botoes = document.getElementById('botoesPosFoto');
-
-    st.textContent = 'Analisando imagem com IA... Pode demorar alguns segundos.';
-    res.style.display = 'none';
-    botoes.style.display = 'none';
-
-    if (!token) await registrarOuLogin();
-
-    const form = new FormData();
-    form.append('arquivo', input.files[0]);
-    form.append('quantidade', String(qtd));
-
-    try {
-      const r = await fetchComAuth(`${API}/imagens/descrever`, {
-        method: 'POST',
-        body: form
-      });
-      const d = await r.json();
-
-      if (r.ok && d.descricoes && d.descricoes.length > 0) {
-        ultimaDescricaoId = d.id;
-        const textos = d.descricoes.map((desc, i) =>
-          qtd > 1 ? `Versão ${i + 1}:\n${desc}` : desc
-        ).join('\n\n---\n\n');
-
-        ultimoTextoImagem = textos;
-        res.textContent = textos;
-        res.style.display = 'block';
-        botoes.style.display = 'block';
-        mostrarPainelPosDescricao();
-        st.textContent = '';
-        lerEmVoz('imagem');
-      } else {
-        st.innerHTML = `<span class="erro">Erro: ${d.detail || JSON.stringify(d)}</span>`;
-      }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro de conexão: ${e.message}</span>`;
+    if (!resp.ok) {
+      const erro = await resp.text();
+      throw new Error(erro);
     }
-  }
 
-  function mostrarPainelPosDescricao() {
-    document.getElementById('painelPosDescricao').style.display = 'block';
-    document.getElementById('formFeedbackRuim').style.display = 'none';
-    document.getElementById('statusFeedback').textContent = '';
-    document.getElementById('statusNomearPessoa').textContent = '';
-    document.getElementById('comentarioRuim').value = '';
-    document.getElementById('nomePessoaImg').value = '';
-    document.getElementById('perguntaTexto').value = '';
-    document.getElementById('resultadoPergunta').style.display = 'none';
-    document.getElementById('statusPergunta').textContent = '';
-  }
+    const blob = await resp.blob();
 
-  async function perguntarSobreImagem() {
-    const pergunta = document.getElementById('perguntaTexto').value.trim();
-    if (!pergunta) { alert('Digite uma pergunta.'); return; }
-    if (!ultimaDescricaoId) { alert('Primeiro descreva uma imagem na aba Imagens.'); return; }
+    if (minhaSequencia !== window.__descritoriaVozSequencia) return;
 
-    const st = document.getElementById('statusPergunta');
-    const res = document.getElementById('resultadoPergunta');
-    st.textContent = 'Buscando resposta...';
-    res.style.display = 'none';
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
 
-    if (!token) await registrarOuLogin();
+    window.__descritoriaAudioAtual = audio;
 
-    try {
-      const r = await fetchComAuth(`${API}/imagens/perguntar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ descricao_id: ultimaDescricaoId, pergunta })
-      });
-      const d = await r.json();
-      if (r.ok) {
-        ultimoTextoPergunta = d.resposta;
-        res.textContent = d.resposta;
-        res.style.display = 'block';
-        document.getElementById('btnOuvirResposta').style.display = 'block';
-        st.textContent = '';
-        lerEmVoz('pergunta');
-      } else {
-        st.innerHTML = `<span class="erro">Erro: ${d.detail}</span>`;
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      if (window.__descritoriaAudioAtual === audio) {
+        window.__descritoriaAudioAtual = null;
       }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+    };
+
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      if (window.__descritoriaAudioAtual === audio) {
+        window.__descritoriaAudioAtual = null;
+      }
+    };
+
+    await audio.play();
+    return;
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      return;
     }
+    console.warn("Falha na voz da xAI. Usando voz do navegador como fallback.", err);
   }
 
-  // ── Documentos ────────────────────────────────────────────────────────────
+  if (minhaSequencia !== window.__descritoriaVozSequencia) return;
+  if (!window.speechSynthesis) return;
 
-  function previewDocumento() {
-    const file = document.getElementById('arquivoDocumento').files[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    document.getElementById('previewDocImg').src = url;
-    document.getElementById('previewDocArea').style.display = 'block';
-  }
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(texto);
+  utter.lang = "pt-BR";
+  utter.rate = 0.95;
+  utter.pitch = 1.0;
+  window.speechSynthesis.speak(utter);
+}
 
-  async function lerDocumento() {
-    const input = document.getElementById('arquivoDocumento');
-    if (!input.files[0]) { alert('Escolha ou fotografe um documento primeiro.'); return; }
+function pararVoz() {
+  window.__descritoriaVozSequencia = (window.__descritoriaVozSequencia || 0) + 1;
 
-    const st = document.getElementById('statusDocumento');
-    const res = document.getElementById('resultadoDocumento');
-    st.textContent = 'Lendo documento... Aguarde.';
-    res.style.display = 'none';
-
-    if (!token) await registrarOuLogin();
-
-    const form = new FormData();
-    form.append('arquivo', input.files[0]);
-
-    try {
-      const r = await fetchComAuth(`${API}/documentos/ler`, {
-        method: 'POST',
-        body: form
-      });
-      const d = await r.json();
-      if (r.ok) {
-        ultimoTextoDocumento = d.texto || d.transcricao || JSON.stringify(d);
-        res.textContent = ultimoTextoDocumento;
-        res.style.display = 'block';
-        document.getElementById('btnOuvirDocumento').style.display = 'block';
-        st.textContent = '';
-        lerEmVoz('documento');
-      } else {
-        st.innerHTML = `<span class="erro">Erro: ${d.detail}</span>`;
-      }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+  try {
+    if (window.__descritoriaTtsAbortController) {
+      window.__descritoriaTtsAbortController.abort();
+      window.__descritoriaTtsAbortController = null;
     }
-  }
+  } catch (e) {}
 
-  // ── Estabelecimentos ──────────────────────────────────────────────────────
-
-  async function buscarEstabelecimentos() {
-    const busca = document.getElementById('buscaLocal').value.trim();
-    const st = document.getElementById('statusLocais');
-    const res = document.getElementById('resultadoLocais');
-    st.textContent = 'Buscando...';
-    res.innerHTML = '';
-
-    try {
-      const params = busca ? `?busca=${encodeURIComponent(busca)}` : '';
-      const r = await fetch(`${API}/estabelecimentos${params}`);
-      const d = await r.json();
-      if (r.ok) {
-        const itens = d.items || [];
-        if (!itens.length) {
-          res.innerHTML = '<p style="color:#888">Nenhum estabelecimento encontrado.</p>';
-          st.textContent = '';
-          return;
-        }
-        res.innerHTML = itens.map(e => `
-          <div class="resultado" style="margin-bottom:10px">
-            <strong>${e.nome}</strong><br>
-            <small style="color:#888">${e.categoria || ''}</small><br>
-            ${e.endereco || ''}<br>
-            ${e.descricao ? `<span style="color:#aaa;font-size:15px">${e.descricao}</span>` : ''}
-            ${e.verificado ? '<span style="color:#30D158"> ✓ Verificado</span>' : ''}
-          </div>`).join('');
-        st.textContent = `${d.total || itens.length} local(is) encontrado(s)`;
-      } else {
-        st.innerHTML = `<span class="erro">${d.detail}</span>`;
-      }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+  try {
+    if (window.__descritoriaAudioAtual) {
+      window.__descritoriaAudioAtual.pause();
+      window.__descritoriaAudioAtual.currentTime = 0;
+      window.__descritoriaAudioAtual.src = "";
+      window.__descritoriaAudioAtual.load();
+      window.__descritoriaAudioAtual = null;
     }
-  }
+  } catch (e) {}
 
-  async function cadastrarLocal() {
-    const nome = document.getElementById('nomeLocal').value.trim();
-    const categoria = document.getElementById('categoriaLocal').value.trim();
-    const endereco = document.getElementById('enderecoLocal').value.trim();
-    const descricao = document.getElementById('descricaoLocal').value.trim();
-
-    if (!nome || !categoria || !endereco) { alert('Preencha nome, categoria e endereço.'); return; }
-    if (!token) await registrarOuLogin();
-
-    const st = document.getElementById('statusCadastroLocal');
-    st.textContent = 'Cadastrando...';
-
-    try {
-      const r = await fetch(`${API}/estabelecimentos`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, categoria, endereco, descricao })
-      });
-      const d = await r.json();
-      if (r.ok) {
-        st.innerHTML = '<span class="ok">✓ Local cadastrado com sucesso!</span>';
-        ['nomeLocal','categoriaLocal','enderecoLocal','descricaoLocal'].forEach(id => document.getElementById(id).value = '');
-        buscarEstabelecimentos();
-      } else {
-        st.innerHTML = `<span class="erro">Erro: ${d.detail}</span>`;
-      }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
+  try {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
-  }
+  } catch (e) {}
 
-  // ── Conta ─────────────────────────────────────────────────────────────────
+  setStatus("Voz parada.");
+}
 
-  async function carregarPerfil() {
-    if (!token) { document.getElementById('infoConta').textContent = 'Não conectado.'; return; }
+function authHeaders(extra = {}) {
+  return { ...extra, Authorization: `Bearer ${token}` };
+}
+
+async function apiFetch(url, options = {}) {
+  const headers = options.headers || {};
+  const resp = await fetch(API + url, {
+    ...options,
+    headers: token ? authHeaders(headers) : headers
+  });
+  if (!resp.ok) {
+    let detail = "";
     try {
-      const r = await fetch(`${API}/usuario/perfil`, { headers: { Authorization: `Bearer ${token}` } });
-      const d = await r.json();
-      if (r.ok) {
-        document.getElementById('infoConta').innerHTML =
-          `<strong>Nome:</strong> ${d.nome}<br><strong>E-mail:</strong> ${d.email}<br><strong>Desde:</strong> ${new Date(d.created_at).toLocaleDateString('pt-BR')}`;
-      } else {
-        document.getElementById('infoConta').innerHTML = `<span class="erro">${d.detail}</span>`;
-      }
-    } catch (e) {
-      document.getElementById('infoConta').innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
-    }
-  }
-
-  async function carregarSaldo() {
-    if (!token) return;
-    try {
-      const r = await fetch(`${API}/usuario/saldo`, { headers: { Authorization: `Bearer ${token}` } });
-      const d = await r.json();
-      if (r.ok) {
-        document.getElementById('infoSaldo').textContent = `PM$ ${d.saldo || d.saldo_perceptmoney || 0}`;
-      }
-    } catch {}
-  }
-
-  function sair() {
-    if (!confirm('Deseja sair da conta?')) return;
-    localStorage.removeItem('descritoria_token');
-    token = null;
-    setStatus('Sessão encerrada. Recarregue a página.', 'erro');
-  }
-
-  // ── Feedback ──────────────────────────────────────────────────────────────
-
-  async function enviarFeedbackBom() {
-    if (!ultimaDescricaoId) { alert('Descreva uma imagem primeiro.'); return; }
-    const st = document.getElementById('statusFeedback');
-    st.textContent = 'Enviando...';
-    try {
-      const r = await fetchComAuth(`${API}/feedback/bom`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ descricao_id: ultimaDescricaoId })
-      });
-      const d = await r.json();
-      if (r.ok) {
-        st.innerHTML = '<span class="ok">✓ Obrigado! Feedback positivo registrado.</span>';
-      } else {
-        st.innerHTML = `<span class="erro">${d.detail || 'Erro ao enviar.'}</span>`;
-      }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
-    }
-  }
-
-  function mostrarFormRuim() {
-    document.getElementById('formFeedbackRuim').style.display = 'block';
-    document.getElementById('comentarioRuim').focus();
-  }
-
-  async function enviarFeedbackRuim() {
-    if (!ultimaDescricaoId) { alert('Descreva uma imagem primeiro.'); return; }
-    const comentario = document.getElementById('comentarioRuim').value.trim();
-    if (comentario.length < 5) { alert('Escreva pelo menos 5 caracteres explicando o que não ficou bom.'); return; }
-    const st = document.getElementById('statusFeedback');
-    st.textContent = 'Enviando...';
-    try {
-      const r = await fetchComAuth(`${API}/feedback/ruim`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ descricao_id: ultimaDescricaoId, comentario })
-      });
-      const d = await r.json();
-      if (r.ok) {
-        st.innerHTML = '<span class="ok">✓ Feedback registrado. A IA aprendeu com seu comentário — será aplicado nas próximas descrições.</span>';
-        document.getElementById('formFeedbackRuim').style.display = 'none';
-      } else {
-        st.innerHTML = `<span class="erro">${d.detail || 'Erro ao enviar.'}</span>`;
-      }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
-    }
-  }
-
-  // ── Nomear pessoa a partir da descrição ───────────────────────────────────
-
-  async function nomearPessoaDaImagem() {
-    const nome = document.getElementById('nomePessoaImg').value.trim();
-    if (!nome) { alert('Digite um nome.'); return; }
-    if (!ultimoTextoImagem) { alert('Descreva uma imagem primeiro.'); return; }
-    const st = document.getElementById('statusNomearPessoa');
-    st.textContent = 'Salvando...';
-    try {
-      const r = await fetchComAuth(`${API}/pessoas`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, caracteristicas: ultimoTextoImagem })
-      });
-      const d = await r.json();
-      if (r.ok) {
-        st.innerHTML = `<span class="ok">✓ ${nome} salvo(a) na memória. Será reconhecido(a) em próximas imagens.</span>`;
-        document.getElementById('nomePessoaImg').value = '';
-      } else {
-        st.innerHTML = `<span class="erro">${d.detail || 'Erro ao salvar.'}</span>`;
-      }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
-    }
-  }
-
-  // ── Internet ──────────────────────────────────────────────────────────────
-
-  async function descreverUrlImagem() {
-    const url = document.getElementById('urlInternet').value.trim();
-    if (!url) { alert('Cole uma URL primeiro.'); return; }
-    const st = document.getElementById('statusInternet');
-    const res = document.getElementById('resultadoInternet');
-    st.textContent = 'Buscando e descrevendo imagem... pode demorar.';
-    res.innerHTML = '';
-    try {
-      const r = await fetchComAuth(`${API}/imagens/descrever-url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, quantidade: 1 })
-      });
-      const d = await r.json();
-      if (r.ok && d.descricoes && d.descricoes.length > 0) {
-        ultimaDescricaoId = d.id;
-        ultimoTextoImagem = d.descricoes[0];
-        res.innerHTML = `<div class="resultado">${d.descricoes[0]}</div>`;
-        st.textContent = '';
-        mostrarPainelPosDescricao();
-        lerEmVoz('imagem');
-      } else {
-        st.innerHTML = `<span class="erro">${d.detail || 'Erro ao descrever.'}</span>`;
-      }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
-    }
-  }
-
-  async function descreverPagina() {
-    const url = document.getElementById('urlInternet').value.trim();
-    if (!url) { alert('Cole uma URL primeiro.'); return; }
-    const st = document.getElementById('statusInternet');
-    const res = document.getElementById('resultadoInternet');
-    st.textContent = 'Abrindo a página e descrevendo as imagens... pode demorar bastante.';
-    res.innerHTML = '';
-    try {
-      const r = await fetchComAuth(`${API}/imagens/descrever-pagina`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, limite: 5 })
-      });
-      const d = await r.json();
-      if (r.ok && d.imagens && d.imagens.length > 0) {
-        st.textContent = `${d.total_descritas} imagem(ns) descrita(s) de ${d.total_imagens_encontradas} encontrada(s).`;
-        window._descsPagina = d.imagens.map(img => img.descricao);
-        ultimaDescricaoId = d.imagens[0].id;
-        ultimoTextoImagem = d.imagens[0].descricao;
-        res.innerHTML = d.imagens.map((img, i) => `
-          <div class="resultado" style="margin-bottom:10px;">
-            <strong>Imagem ${i + 1}</strong><br>
-            ${img.descricao.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}<br><br>
-            <button class="btn-laranja" onclick="lerEmVozPagina(${i})">🔊 Ouvir</button>
-          </div>`).join('');
-      } else {
-        st.innerHTML = `<span class="erro">${d.detail || 'Não foi possível descrever.'}</span>`;
-      }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
-    }
-  }
-
-  // ── Pessoas ───────────────────────────────────────────────────────────────
-
-  async function carregarPessoas() {
-    const st = document.getElementById('statusPessoas');
-    const lista = document.getElementById('listaPessoas');
-    st.textContent = 'Carregando...';
-    try {
-      const r = await fetchComAuth(`${API}/pessoas`);
-      const d = await r.json();
-      if (r.ok) {
-        if (!d.length) {
-          lista.innerHTML = '<p style="color:#888;margin-top:10px;">Nenhuma pessoa salva ainda.</p>';
-        } else {
-          lista.innerHTML = d.map(p => `
-            <div class="resultado" style="margin-bottom:10px;">
-              <strong>${p.nome}</strong><br>
-              <span style="color:#aaa;font-size:15px;">${p.caracteristicas}</span><br><br>
-              <button class="btn-vermelho" onclick="removerPessoa(${p.id}, '${p.nome.replace(/'/g, "\\'")}')">🗑 Remover</button>
-            </div>`).join('');
-        }
-        st.textContent = '';
-      } else {
-        st.innerHTML = `<span class="erro">${d.detail}</span>`;
-      }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
-    }
-  }
-
-  async function adicionarPessoa() {
-    const nome = document.getElementById('novaPessoaNome').value.trim();
-    const caracteristicas = document.getElementById('novaPessoaCaract').value.trim();
-    if (!nome || !caracteristicas) { alert('Preencha nome e características.'); return; }
-    const st = document.getElementById('statusNovaPessoa');
-    st.textContent = 'Salvando...';
-    try {
-      const r = await fetchComAuth(`${API}/pessoas`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, caracteristicas })
-      });
-      const d = await r.json();
-      if (r.ok) {
-        st.innerHTML = '<span class="ok">✓ Pessoa salva!</span>';
-        document.getElementById('novaPessoaNome').value = '';
-        document.getElementById('novaPessoaCaract').value = '';
-        carregarPessoas();
-      } else {
-        st.innerHTML = `<span class="erro">${d.detail}</span>`;
-      }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
-    }
-  }
-
-  async function removerPessoa(id, nome) {
-    if (!confirm(`Remover ${nome} da memória?`)) return;
-    try {
-      const r = await fetchComAuth(`${API}/pessoas/${id}`, { method: 'DELETE' });
-      if (r.ok) carregarPessoas();
-    } catch {}
-  }
-
-  // ── Estilo de Descrição ───────────────────────────────────────────────────
-
-  async function carregarEstilo() {
-    if (!token) return;
-    try {
-      const r = await fetchComAuth(`${API}/usuario/estilo-descricao`);
-      const d = await r.json();
-      if (r.ok) {
-        document.getElementById('estiloDescricao').value = d.estilo || '';
-      }
-    } catch {}
-  }
-
-  async function salvarEstilo() {
-    const estilo = document.getElementById('estiloDescricao').value;
-    const st = document.getElementById('statusEstilo');
-    st.textContent = 'Salvando...';
-    try {
-      const r = await fetchComAuth(`${API}/usuario/estilo-descricao`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estilo })
-      });
-      const d = await r.json();
-      if (r.ok) {
-        st.innerHTML = '<span class="ok">✓ Estilo salvo. Será usado nas próximas descrições.</span>';
-      } else {
-        st.innerHTML = `<span class="erro">${d.detail}</span>`;
-      }
-    } catch (e) {
-      st.innerHTML = `<span class="erro">Erro: ${e.message}</span>`;
-    }
-  }
-
-  // ── Voz ───────────────────────────────────────────────────────────────────
-
-  function lerEmVozPagina(i) {
-    if (window._descsPagina && window._descsPagina[i]) lerEmVoz(window._descsPagina[i]);
-  }
-
-  let _audioAtual = null;
-
-  // Minimal silent WAV para desbloquear áudio no iOS em contexto de gesto
-  const _SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-
-  async function lerEmVoz(origem) {
-    let texto = '';
-    if (origem === 'imagem') texto = ultimoTextoImagem;
-    else if (origem === 'pergunta') texto = ultimoTextoPergunta;
-    else if (origem === 'documento') texto = ultimoTextoDocumento;
-    else texto = origem;
-
-    if (!texto) return;
-    pararVoz();
-
-    // iOS: desbloqueia áudio no contexto síncrono do gesto do usuário
-    const unlock = new Audio(_SILENT_WAV);
-    unlock.play().catch(() => {});
-
-    const stGlobal = document.getElementById('statusGlobal');
-    if (stGlobal) stGlobal.textContent = '🔊 Carregando voz…';
-
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 25000);
-    try {
-      const resp = await fetchComAuth('/tts/falar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto }),
-        signal: controller.signal,
-      });
-      clearTimeout(tid);
-      if (stGlobal) stGlobal.textContent = '';
-      if (!resp.ok) return;
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      _audioAtual = new Audio(url);
-      _audioAtual.play();
-      _audioAtual.onended = () => { URL.revokeObjectURL(url); _audioAtual = null; };
+      const data = await resp.json();
+      detail = data.detail || JSON.stringify(data);
     } catch {
-      clearTimeout(tid);
-      if (stGlobal) stGlobal.textContent = '';
+      detail = await resp.text();
     }
+    throw new Error(detail || `Erro HTTP ${resp.status}`);
+  }
+  return resp.json();
+}
+
+async function garantirLoginDemo() {
+  if (token) {
+    setStatus("Conectado.");
+    return;
   }
 
-  function pararVoz() {
-    if (_audioAtual) { _audioAtual.pause(); _audioAtual = null; }
+  const usuarioDemo = {
+    nome: "Daniel Teste",
+    email: "danielgrechi@gmail.com",
+    senha: "Descritoria123"
+  };
+
+  try {
+    await fetch(API + "/registro", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(usuarioDemo)
+    });
+  } catch (err) {
+    // Se já existir, seguimos para login.
   }
 
-  // ── Câmera ao Vivo ────────────────────────────────────────────────────────
+  try {
+    const resp = await fetch(API + "/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: usuarioDemo.email,
+        senha: usuarioDemo.senha
+      })
+    });
 
-  let wsAoVivo = null;
-  let streamCamera = null;
-  let intervalDescricao = null;
-
-  async function iniciarCameraAoVivo() {
-    if (!tokenJWT) {
-      document.getElementById('statusAoVivo').textContent = 'Faça login primeiro.';
-      return;
-    }
-    try {
-      streamCamera = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      });
-    } catch (e) {
-      document.getElementById('statusAoVivo').textContent = 'Não foi possível acessar a câmera: ' + e.message;
-      return;
+    if (!resp.ok) {
+      throw new Error(await resp.text());
     }
 
-    const video = document.getElementById('videoAoVivo');
-    video.srcObject = streamCamera;
-    video.style.display = 'block';
+    const data = await resp.json();
+    token = data.access_token;
+    localStorage.setItem("descritoria_token", token);
+    setStatus("Conectado em conta local de teste.");
+  } catch (err) {
+    setStatus("Não foi possível fazer login automático: " + err.message);
+  }
+}
 
-    document.getElementById('btnIniciarCamera').style.display = 'none';
-    document.getElementById('btnPararCamera').style.display = '';
-    document.getElementById('statusAoVivo').textContent = 'Câmera iniciada. Aguardando primeira descrição…';
+function abrirAba(nome) {
+  for (const section of document.querySelectorAll("main > section")) {
+    section.hidden = section.id !== `tab-${nome}`;
+  }
+}
 
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    wsAoVivo = new WebSocket(`${proto}//${location.host}/videos/aovivo?token=${tokenJWT}`);
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.addEventListener("click", () => abrirAba(btn.dataset.tab));
+});
 
-    wsAoVivo.onopen = () => {
-      document.getElementById('statusAoVivo').textContent = 'Conectado. Descrevendo a cada 5 segundos…';
-      enviarFrameAoVivo();
-      intervalDescricao = setInterval(enviarFrameAoVivo, 5000);
+document.getElementById("btnGaleria").addEventListener("click", () => document.getElementById("inputGaleria").click());
+document.getElementById("btnCamera").addEventListener("click", () => document.getElementById("inputCamera").click());
+
+document.getElementById("inputGaleria").addEventListener("change", e => descreverArquivo(e.target.files[0]));
+document.getElementById("inputCamera").addEventListener("change", e => descreverArquivo(e.target.files[0]));
+
+async function descreverArquivo(file) {
+  if (!file) return;
+  ultimoArquivoImagem = file;
+  const form = new FormData();
+  form.append("arquivo", file);
+  form.append("quantidade", "1");
+  setStatus("Enviando imagem para descrição.");
+  try {
+    const data = await apiFetch("/imagens/descrever", { method: "POST", body: form });
+    const texto = data.descricoes?.[0] || "";
+    ultimaDescricaoId = data.id;
+    document.getElementById("textoDescricao").textContent = texto;
+    document.getElementById("resultadoImagem").hidden = false;
+    document.getElementById("respostaPerguntaBox").hidden = true;
+    setStatus("Descrição gerada.");
+    falar(texto);
+  } catch (err) {
+    setStatus("Erro ao descrever imagem: " + err.message);
+  }
+}
+
+document.getElementById("ouvirDescricao").addEventListener("click", () => falar(document.getElementById("textoDescricao").textContent));
+document.getElementById("pararVoz1").addEventListener("click", pararVoz);
+document.getElementById("ouvirResposta").addEventListener("click", () => falar(document.getElementById("respostaPergunta").textContent));
+
+document.getElementById("btnPerguntarImagem").addEventListener("click", async () => {
+  const pergunta = document.getElementById("perguntaImagem").value.trim();
+  if (!ultimaDescricaoId || !pergunta) {
+    setStatus("Faça uma descrição e escreva uma pergunta primeiro.");
+    return;
+  }
+  setStatus("Enviando pergunta.");
+  try {
+    const data = await apiFetch("/imagens/perguntar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ descricao_id: ultimaDescricaoId, pergunta })
+    });
+    document.getElementById("respostaPergunta").textContent = data.resposta || "";
+    document.getElementById("respostaPerguntaBox").hidden = false;
+    setStatus("Resposta gerada.");
+    falar(data.resposta || "");
+  } catch (err) {
+    setStatus("Erro ao perguntar: " + err.message);
+  }
+});
+
+async function enviarFeedback(tipo, comentario = "") {
+  if (!ultimaDescricaoId) {
+    setStatus("Nenhuma descrição para avaliar.");
+    return;
+  }
+  try {
+    const endpoint = tipo === "bom" ? "/feedback/bom" : "/feedback/ruim";
+    const body = tipo === "bom"
+      ? { descricao_id: ultimaDescricaoId, comentario: comentario || undefined }
+      : { descricao_id: ultimaDescricaoId, comentario: comentario || "A descrição não ficou boa." };
+    const data = await apiFetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    setStatus(data.aprendizado || "Feedback enviado.");
+    await carregarEstilo();
+  } catch (err) {
+    setStatus("Erro ao enviar feedback: " + err.message);
+  }
+}
+
+document.getElementById("feedbackBom").addEventListener("click", () => enviarFeedback("bom", document.getElementById("feedbackComentario").value));
+document.getElementById("feedbackRuim").addEventListener("click", () => enviarFeedback("ruim", document.getElementById("feedbackComentario").value));
+document.getElementById("enviarFeedbackTexto").addEventListener("click", () => {
+  const comentario = document.getElementById("feedbackComentario").value.trim();
+  enviarFeedback(comentario ? "ruim" : "bom", comentario);
+});
+
+document.getElementById("btnDescreverUrl").addEventListener("click", async () => {
+  const url = document.getElementById("urlInternet").value.trim();
+  if (!url) return setStatus("Informe uma URL.");
+
+  const btnUrl = document.getElementById("btnDescreverUrl");
+  const btnPagina = document.getElementById("btnDescreverPagina");
+  const resultadoEl = document.getElementById("resultadoInternet");
+
+  btnUrl.disabled = true;
+  btnPagina.disabled = true;
+  resultadoEl.textContent = "";
+  setStatus("Descrevendo imagem da internet...");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90000);
+
+  try {
+    const resp = await fetch(API + "/imagens/descrever-url", {
+      method: "POST",
+      headers: token
+        ? { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
+        : { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, quantidade: 1 }),
+      signal: controller.signal
+    });
+
+    if (!resp.ok) {
+      let detalhe = "";
+      try { const d = await resp.json(); detalhe = d.detail || JSON.stringify(d); }
+      catch { detalhe = await resp.text(); }
+      throw new Error(detalhe || `Erro HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const descricao = data.descricoes?.[0] || data.descricao || "";
+    resultadoEl.textContent = descricao;
+    ultimaDescricaoId = data.id;
+    falar(descricao);
+    setStatus("Imagem da internet descrita.");
+  } catch (err) {
+    if (err.name === "AbortError") {
+      const msg = "Tempo limite atingido. O site pode estar bloqueando acesso automático, carregando por script, exigindo captcha/login ou demorando demais.";
+      resultadoEl.textContent = msg;
+      setStatus("Tempo limite atingido.");
+    } else {
+      resultadoEl.textContent = err.message;
+      setStatus("Erro: " + err.message);
+    }
+  } finally {
+    clearTimeout(timer);
+    btnUrl.disabled = false;
+    btnPagina.disabled = false;
+  }
+});
+
+document.getElementById("btnDescreverPagina").addEventListener("click", async () => {
+  const url = document.getElementById("urlInternet").value.trim();
+  if (!url) return setStatus("Informe uma URL.");
+
+  const btnUrl = document.getElementById("btnDescreverUrl");
+  const btnPagina = document.getElementById("btnDescreverPagina");
+  const resultadoEl = document.getElementById("resultadoInternet");
+
+  btnUrl.disabled = true;
+  btnPagina.disabled = true;
+  resultadoEl.textContent = "";
+  setStatus("Buscando imagens da página...");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120000);
+
+  try {
+    const resp = await fetch(API + "/imagens/descrever-pagina", {
+      method: "POST",
+      headers: token
+        ? { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
+        : { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, limite: 5 }),
+      signal: controller.signal
+    });
+
+    if (!resp.ok) {
+      let detalhe = "";
+      try { const d = await resp.json(); detalhe = d.detail || JSON.stringify(d); }
+      catch { detalhe = await resp.text(); }
+      throw new Error(detalhe || `Erro HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const totalDescritas = data.total_descritas ?? data.total_descritas ?? 0;
+    const texto = (data.imagens || []).map((img, i) => `Imagem ${i + 1}:\n${img.descricao}`).join("\n\n");
+    resultadoEl.textContent = texto || "Nenhuma imagem descrita.";
+    if (texto) falar(`Encontrei e descrevi ${totalDescritas} imagem${totalDescritas !== 1 ? "s" : ""}. ` + texto);
+    setStatus(`Página processada. ${totalDescritas} imagem${totalDescritas !== 1 ? "s" : ""} descrita${totalDescritas !== 1 ? "s" : ""}.`);
+  } catch (err) {
+    if (err.name === "AbortError") {
+      const msg = "Tempo limite atingido. O site pode estar bloqueando acesso automático, carregando por script, exigindo captcha/login ou demorando demais.";
+      resultadoEl.textContent = msg;
+      setStatus("Tempo limite atingido.");
+    } else {
+      resultadoEl.textContent = err.message;
+      setStatus("Erro ao descrever página: " + err.message);
+    }
+  } finally {
+    clearTimeout(timer);
+    btnUrl.disabled = false;
+    btnPagina.disabled = false;
+  }
+});
+
+document.getElementById("btnDocCamera").addEventListener("click", () => document.getElementById("inputDocCamera").click());
+document.getElementById("btnDocGaleria").addEventListener("click", () => document.getElementById("inputDocGaleria").click());
+document.getElementById("btnDocArquivo").addEventListener("click", () => document.getElementById("inputDocArquivo").click());
+["inputDocCamera", "inputDocGaleria", "inputDocArquivo"].forEach(id => {
+  document.getElementById(id).addEventListener("change", e => lerDocumento(e.target.files[0]));
+});
+
+async function lerDocumento(file) {
+  if (!file) return;
+  const form = new FormData();
+  form.append("arquivo", file);
+  setStatus("Enviando documento.");
+  try {
+    const data = await apiFetch("/documentos/ler", { method: "POST", body: form });
+    document.getElementById("resultadoDocumento").textContent = data.texto || "";
+    setStatus("Documento lido.");
+    falar(data.texto || "");
+  } catch (err) {
+    setStatus("Erro ao ler documento: " + err.message);
+  }
+}
+document.getElementById("ouvirDocumento").addEventListener("click", () => falar(document.getElementById("resultadoDocumento").textContent));
+
+async function iniciarAoVivo() {
+  if (!token) return setStatus("Faça login antes de usar a câmera ao vivo.");
+  try {
+    streamAoVivo = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true });
+    const video = document.getElementById("videoAoVivo");
+    video.srcObject = streamAoVivo;
+    video.hidden = false;
+    await video.play();
+
+    const wsUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/videos/aovivo?token=${encodeURIComponent(token)}`;
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      setStatus("Câmera ao vivo iniciada.");
+      falar("Câmera ao vivo iniciada.");
+      intervaloAoVivo = setInterval(enviarFrameAoVivo, 5000);
     };
-
-    wsAoVivo.onmessage = (e) => {
-      const dados = JSON.parse(e.data);
-      if (dados.descricao) {
-        const resultado = document.getElementById('resultadoAoVivo');
-        resultado.style.display = '';
-        resultado.textContent = dados.descricao;
-        document.getElementById('btnOuvirAoVivo').style.display = '';
-        document.getElementById('statusAoVivo').textContent = 'Descrevendo…';
-        lerEmVoz(dados.descricao);
-      } else if (dados.erro) {
-        document.getElementById('statusAoVivo').textContent = 'Erro: ' + dados.erro;
+    ws.onmessage = ev => {
+      const data = JSON.parse(ev.data);
+      if (data.tipo === "descricao") {
+        document.getElementById("resultadoAoVivo").textContent = data.texto;
+        falar(data.texto);
+      } else if (data.mensagem) {
+        setStatus(data.mensagem);
       }
     };
+    ws.onerror = () => setStatus("Erro na conexão ao vivo.");
+    ws.onclose = () => setStatus("Câmera ao vivo desconectada.");
+  } catch (err) {
+    setStatus("Não foi possível acessar a câmera. Verifique a permissão do navegador. " + err.message);
+    falar("Não foi possível acessar a câmera. Verifique a permissão do navegador.");
+  }
+}
 
-    wsAoVivo.onerror = () => {
-      document.getElementById('statusAoVivo').textContent = 'Erro na conexão WebSocket.';
-    };
+function enviarFrameAoVivo() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const video = document.getElementById("videoAoVivo");
+  if (!video.videoWidth) return;
+  const canvas = document.getElementById("canvasAoVivo");
+  canvas.width = Math.min(video.videoWidth, 768);
+  canvas.height = Math.round(video.videoHeight * (canvas.width / video.videoWidth));
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const dataUri = canvas.toDataURL("image/jpeg", 0.78);
+  ws.send(JSON.stringify({ tipo: "frame", data_uri: dataUri, pergunta: perguntaAoVivo }));
+  perguntaAoVivo = "";
+}
 
-    wsAoVivo.onclose = () => {
-      clearInterval(intervalDescricao);
-      document.getElementById('statusAoVivo').textContent = 'Conexão encerrada.';
-    };
+function pararAoVivo() {
+  if (intervaloAoVivo) clearInterval(intervaloAoVivo);
+  intervaloAoVivo = null;
+  if (ws) ws.close();
+  ws = null;
+  if (streamAoVivo) streamAoVivo.getTracks().forEach(t => t.stop());
+  streamAoVivo = null;
+  document.getElementById("videoAoVivo").hidden = true;
+  setStatus("Câmera ao vivo parada.");
+  falar("Câmera ao vivo parada.");
+}
+
+function perguntarPorVoz() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    setStatus("Reconhecimento de voz não disponível neste navegador.");
+    falar("Reconhecimento de voz não disponível neste navegador.");
+    return;
+  }
+  const rec = new SpeechRecognition();
+  rec.lang = "pt-BR";
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+  rec.onresult = ev => {
+    perguntaAoVivo = ev.results[0][0].transcript;
+    setStatus("Pergunta recebida: " + perguntaAoVivo);
+    falar("Pergunta recebida. Vou responder no próximo frame.");
+    enviarFrameAoVivo();
+  };
+  rec.onerror = () => setStatus("Não consegui ouvir a pergunta.");
+  rec.start();
+  setStatus("Ouvindo pergunta.");
+}
+
+document.getElementById("btnIniciarAoVivo").addEventListener("click", iniciarAoVivo);
+document.getElementById("btnPararAoVivo").addEventListener("click", pararAoVivo);
+document.getElementById("btnPerguntaVoz").addEventListener("click", perguntarPorVoz);
+document.getElementById("btnRepetirAoVivo").addEventListener("click", () => falar(document.getElementById("resultadoAoVivo").textContent || ultimoTextoFalado));
+document.getElementById("btnPararVozAoVivo").addEventListener("click", pararVoz);
+
+async function carregarConta() {
+  try {
+    const perfil = await apiFetch("/usuario/perfil");
+    document.getElementById("dadosConta").textContent = `Nome: ${perfil.nome}. E-mail: ${perfil.email}.`;
+    await carregarEstilo();
+    await carregarPessoas();
+  } catch (err) {
+    document.getElementById("dadosConta").textContent = "Não foi possível carregar conta: " + err.message;
+  }
+}
+
+async function carregarEstilo() {
+  try {
+    const data = await apiFetch("/usuario/estilo-descricao");
+    document.getElementById("estiloDescricao").value = data.estilo || "";
+    document.getElementById("perfilAprendido").value = data.perfil_aprendizado_ia || "";
+  } catch {}
+}
+
+document.getElementById("btnAtualizarConta").addEventListener("click", carregarConta);
+document.getElementById("btnSalvarEstilo").addEventListener("click", async () => {
+  try {
+    await apiFetch("/usuario/estilo-descricao", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ estilo: document.getElementById("estiloDescricao").value })
+    });
+    setStatus("Estilo salvo.");
+  } catch (err) {
+    setStatus("Erro ao salvar estilo: " + err.message);
+  }
+});
+document.getElementById("btnSalvarPerfilAprendido").addEventListener("click", async () => {
+  try {
+    await apiFetch("/usuario/perfil-aprendizado", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ perfil_aprendizado_ia: document.getElementById("perfilAprendido").value })
+    });
+    setStatus("Perfil aprendido salvo.");
+  } catch (err) {
+    setStatus("Erro ao salvar perfil aprendido: " + err.message);
+  }
+});
+document.getElementById("btnApagarAprendizado").addEventListener("click", async () => {
+  try {
+    await apiFetch("/usuario/perfil-aprendizado", { method: "DELETE" });
+    document.getElementById("perfilAprendido").value = "";
+    setStatus("Aprendizados apagados.");
+  } catch (err) {
+    setStatus("Erro ao apagar aprendizados: " + err.message);
+  }
+});
+
+async function carregarPessoas() {
+  try {
+    const pessoas = await apiFetch("/pessoas");
+    document.getElementById("listaPessoas").textContent = pessoas.length
+      ? pessoas.map(p => `${p.nome}: ${p.caracteristicas}`).join("\n\n")
+      : "Nenhuma pessoa cadastrada.";
+  } catch (err) {
+    document.getElementById("listaPessoas").textContent = "Erro ao carregar pessoas: " + err.message;
+  }
+}
+document.getElementById("btnAtualizarPessoas").addEventListener("click", carregarPessoas);
+document.getElementById("btnSalvarPessoa").addEventListener("click", async () => {
+  const nome = document.getElementById("pessoaNome").value.trim();
+  const caracteristicas = document.getElementById("pessoaCaracteristicas").value.trim();
+  if (!nome || !caracteristicas) return setStatus("Informe nome e características.");
+  try {
+    await apiFetch("/pessoas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome, caracteristicas })
+    });
+    setStatus("Pessoa salva.");
+    await carregarPessoas();
+  } catch (err) {
+    setStatus("Erro ao salvar pessoa: " + err.message);
+  }
+});
+
+document.getElementById("btnSair").addEventListener("click", () => {
+  localStorage.removeItem("descritoria_token");
+  token = "";
+  setStatus("Você saiu da conta.");
+});
+
+garantirLoginDemo();
+carregarConta();
+
+// Correção dedicada: botão Ouvir descrição
+function ouvirDescricaoAtual() {
+  const el = document.getElementById("textoDescricao");
+  const texto = ((el && (el.innerText || el.textContent)) || ultimoTextoFalado || "").trim();
+
+  if (!texto) {
+    setStatus("Ainda não há descrição para ouvir.");
+    return;
   }
 
-  function enviarFrameAoVivo() {
-    const video = document.getElementById('videoAoVivo');
-    const canvas = document.getElementById('canvasCaptura');
-    if (!video.videoWidth || !wsAoVivo || wsAoVivo.readyState !== WebSocket.OPEN) return;
+  setStatus("Lendo descrição.");
+  falar(texto);
+}
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
+// Amarra o botão Ouvir descrição de forma redundante e segura.
+function configurarBotaoOuvirDescricao() {
+  const btn = document.getElementById("ouvirDescricao");
+  if (!btn) return;
 
-    const base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
-    const pergunta = document.getElementById('perguntaAoVivo').value.trim();
-    const payload = pergunta ? { frame: base64, pergunta } : { frame: base64 };
-    wsAoVivo.send(JSON.stringify(payload));
-    document.getElementById('statusAoVivo').textContent = 'Processando…';
+  btn.type = "button";
+  btn.onclick = function(ev) {
+    if (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+    ouvirDescricaoAtual();
+    return false;
+  };
+
+  btn.addEventListener("click", function(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    ouvirDescricaoAtual();
+  }, true);
+}
+
+configurarBotaoOuvirDescricao();
+
+document.addEventListener("click", function(ev) {
+  const alvo = ev.target;
+  if (alvo && alvo.id === "ouvirDescricao") {
+    ev.preventDefault();
+    ev.stopPropagation();
+    ouvirDescricaoAtual();
   }
+}, true);
 
-  function pararCameraAoVivo() {
-    clearInterval(intervalDescricao);
-    intervalDescricao = null;
-    if (wsAoVivo) { wsAoVivo.close(); wsAoVivo = null; }
-    if (streamCamera) { streamCamera.getTracks().forEach(t => t.stop()); streamCamera = null; }
-    const video = document.getElementById('videoAoVivo');
-    video.srcObject = null;
-    video.style.display = 'none';
-    document.getElementById('btnIniciarCamera').style.display = '';
-    document.getElementById('btnPararCamera').style.display = 'none';
-    document.getElementById('btnOuvirAoVivo').style.display = 'none';
-    document.getElementById('statusAoVivo').textContent = 'Câmera parada.';
-    pararVoz();
-  }
-
-  // ── Start ─────────────────────────────────────────────────────────────────
-  inicializar();
 </script>
 </body>
 </html>
