@@ -5,4 +5,4 @@ descritoria.db
 *.db
 *.sqlite
 .env
-*.bak_antes_internet
+*.bak_antes_*
