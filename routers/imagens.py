@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import io
@@ -196,22 +197,60 @@ def chamar_modelo(data_uri: str, prompt: str, max_tokens: int = 1500) -> str:
         ],
         max_tokens=max_tokens,
         temperature=0,
+        timeout=45,
     )
     return (response.choices[0].message.content or "").strip()
 
 
+_UA_CHROME = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
+_EXCLUIR_CANDIDATAS = [
+    "favicon", "pixel", "track", "1x1", "2x1", "1x2",
+    "blank", "spacer", "ad.gif", "ads.", "doubleclick",
+    "google-analytics", "googletagmanager", ".svg",
+    "sprite", "placeholder", "loading.gif",
+]
+
+_EXTENSOES_VIDEO = {
+    ".mp4", ".webm", ".avi", ".mov", ".mkv",
+    ".flv", ".wmv", ".m4v", ".ogv", ".3gp",
+}
+
+
+def _parece_url_video(url: str) -> bool:
+    caminho = urlparse(url).path.lower().split("?")[0]
+    return any(caminho.endswith(ext) for ext in _EXTENSOES_VIDEO)
+
+
+def _tamanho_imagem_ok(dados: bytes) -> bool:
+    try:
+        img = Image.open(io.BytesIO(dados))
+        w, h = img.size
+        return w >= 80 and h >= 80
+    except Exception:
+        return True
+
+
 def _headers_para_download(referer: Optional[str] = None) -> dict[str, str]:
     headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
-        ),
-        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        "User-Agent": _UA_CHROME,
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
     }
     if referer:
         headers["Referer"] = referer
     return headers
+
+
+def _headers_pagina() -> dict[str, str]:
+    return {
+        "User-Agent": _UA_CHROME,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    }
 
 
 async def baixar_imagem_validada(url: str, referer: Optional[str] = None) -> tuple[bytes, str, str]:
@@ -219,9 +258,10 @@ async def baixar_imagem_validada(url: str, referer: Optional[str] = None) -> tup
     if parsed.scheme not in {"http", "https"}:
         raise HTTPException(status_code=422, detail="A URL deve começar com http:// ou https://.")
 
+    timeout = httpx.Timeout(connect=10.0, read=25.0, write=10.0, pool=5.0)
     try:
         async with httpx.AsyncClient(
-            timeout=30,
+            timeout=timeout,
             follow_redirects=True,
             headers=_headers_para_download(referer),
         ) as client:
@@ -237,17 +277,91 @@ async def baixar_imagem_validada(url: str, referer: Optional[str] = None) -> tup
     if not dados:
         raise HTTPException(status_code=422, detail="A URL retornou um arquivo vazio.")
 
+    if content_type.startswith("video/"):
+        raise HTTPException(status_code=422, detail="Esta URL é um vídeo direto. Tente usar a aba Ao Vivo para análise de vídeo.")
+
+    if content_type.startswith("text/html") or dados[:15].lower().strip().startswith(b"<!doctype"):
+        raise HTTPException(
+            status_code=415,
+            detail=f"__HTML__:{str(resp.url)}",
+        )
+
     try:
         dados_norm, mime_norm = normalizar_imagem_para_grok(dados)
     except HTTPException:
-        if content_type:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Esse link não aponta para uma imagem válida. Ele retornou conteúdo do tipo {content_type}.",
-            )
-        raise
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Esse link não aponta para uma imagem válida (tipo recebido: '{content_type}'). "
+                "Se for página, use o botão 'Descrever página'."
+            ),
+        )
 
     return dados_norm, mime_norm, str(resp.url)
+
+
+async def _baixar_candidato(url: str, referer: Optional[str] = None) -> tuple[bytes, str, str]:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Esquema inválido")
+
+    timeout = httpx.Timeout(connect=8.0, read=15.0, write=8.0, pool=5.0)
+    async with httpx.AsyncClient(
+        timeout=timeout,
+        follow_redirects=True,
+        headers=_headers_para_download(referer),
+    ) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+        content_type = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()
+        dados = resp.content
+
+    if not dados:
+        raise ValueError("URL retornou arquivo vazio")
+
+    if content_type.startswith(("text/", "application/json", "application/xml")):
+        raise ValueError(f"URL retornou {content_type}, não imagem")
+
+    dados_norm, mime_norm = normalizar_imagem_para_grok(dados)
+
+    if not _tamanho_imagem_ok(dados_norm):
+        raise ValueError("Imagem muito pequena (favicon/sprite/tracking pixel)")
+
+    return dados_norm, mime_norm, str(resp.url)
+
+
+def _imagem_principal_do_html(html: str, url_base: str) -> Optional[str]:
+    soup = BeautifulSoup(html, "html.parser")
+
+    for prop in ["og:image", "og:image:secure_url", "og:video:thumbnail", "og:video:image"]:
+        tag = soup.find("meta", property=prop)
+        if tag and tag.get("content", "").strip():
+            return urljoin(url_base, tag["content"].strip())
+
+    for name in ["twitter:image", "twitter:image:src"]:
+        tag = soup.find("meta", attrs={"name": name})
+        if tag and tag.get("content", "").strip():
+            return urljoin(url_base, tag["content"].strip())
+
+    video = soup.find("video")
+    if video and video.get("poster", "").strip():
+        return urljoin(url_base, video["poster"].strip())
+
+    return None
+
+
+async def _buscar_og_image(url_pagina: str) -> Optional[tuple[str, str]]:
+    timeout = httpx.Timeout(connect=10.0, read=20.0, write=10.0, pool=5.0)
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, headers=_headers_pagina()) as client:
+            resp = await client.get(url_pagina)
+            resp.raise_for_status()
+            html = resp.text
+            url_base = str(resp.url)
+        img_url = _imagem_principal_do_html(html, url_base)
+        return (img_url, url_base) if img_url else None
+    except Exception:
+        return None
 
 
 @router.post("/descrever", summary="Descreve uma imagem para usuários com deficiência visual")
@@ -434,7 +548,38 @@ async def descrever_imagem_url(
     usuario: models.Usuario = Depends(obter_usuario_atual),
 ):
     url_limpa = _limpar_url(body.url)
-    dados, mime_type, url_final = await baixar_imagem_validada(url_limpa)
+    url_final = url_limpa
+    referer = None
+
+    try:
+        dados, mime_type, url_final = await baixar_imagem_validada(url_limpa)
+    except HTTPException as e:
+        if e.status_code == 415 and e.detail.startswith("__HTML__:"):
+            resultado_og = await _buscar_og_image(url_limpa)
+            if resultado_og:
+                url_og, referer = resultado_og
+                try:
+                    dados, mime_type, url_final = await baixar_imagem_validada(url_og, referer=referer)
+                except HTTPException as e2:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            "Esta URL é uma página HTML. Encontrei a imagem principal, "
+                            f"mas não consegui baixá-la: {e2.detail}"
+                        ),
+                    )
+            else:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "Esta URL é uma página HTML sem imagem principal identificável "
+                        "(og:image / twitter:image / poster). "
+                        "Cole a URL direta de uma imagem ou use o botão 'Descrever página'."
+                    ),
+                )
+        else:
+            raise
+
     data_uri = imagem_para_data_uri(dados, mime_type)
     prompt_final = _prompt_final(usuario, db)
 
@@ -476,7 +621,7 @@ class PaginaUrlRequest(BaseModel):
     limite: int = Field(5, ge=1, le=10)
 
 
-def _extrair_urls_imagem(html: str, url_base: str) -> list[str]:
+def _extrair_urls_imagem(html: str, url_base: str, max_candidatas: int = 30) -> list[str]:
     soup = BeautifulSoup(html, "html.parser")
     vistas: set[str] = set()
     urls: list[str] = []
@@ -491,73 +636,65 @@ def _extrair_urls_imagem(html: str, url_base: str) -> list[str]:
         parsed = urlparse(absoluta)
         if parsed.scheme not in {"http", "https"}:
             return
-        if absoluta not in vistas:
-            vistas.add(absoluta)
-            urls.append(absoluta)
+        if absoluta in vistas:
+            return
+        if any(k in absoluta.lower() for k in _EXCLUIR_CANDIDATAS):
+            return
+        vistas.add(absoluta)
+        urls.append(absoluta)
 
-    for prop in ["og:image", "og:image:secure_url"]:
+    for prop in ["og:image", "og:image:secure_url", "og:video:thumbnail", "og:video:image"]:
         tag = soup.find("meta", property=prop)
-        adicionar(tag.get("content") if tag else None)
+        if tag:
+            adicionar(tag.get("content"))
 
     for name in ["twitter:image", "twitter:image:src"]:
         tag = soup.find("meta", attrs={"name": name})
-        adicionar(tag.get("content") if tag else None)
+        if tag:
+            adicionar(tag.get("content"))
 
-    attrs = [
-        "src",
-        "data-src",
-        "data-lazy-src",
-        "data-lazy",
-        "data-original",
-        "data-image",
-        "data-img",
-        "data-url",
-        "data-bg",
-        "data-photo",
-        "data-hi-res-src",
-        "data-full-src",
-        "data-large",
-        "data-zoom-image",
+    _attrs_img = [
+        "src", "data-src", "data-lazy-src", "data-lazy", "data-original",
+        "data-image", "data-img", "data-url", "data-bg", "data-photo",
+        "data-hi-res-src", "data-full-src", "data-large", "data-zoom-image",
     ]
     for img in soup.find_all("img"):
-        for attr in attrs:
+        for attr in _attrs_img:
             adicionar(img.get(attr))
-        srcset = img.get("srcset") or img.get("data-srcset")
-        if srcset:
-            for parte in srcset.split(","):
-                adicionar(parte.strip().split()[0] if parte.strip() else None)
+        for srcset_attr in ("srcset", "data-srcset"):
+            srcset = img.get(srcset_attr, "")
+            if srcset:
+                for parte in srcset.split(","):
+                    tokens = parte.strip().split()
+                    if tokens:
+                        adicionar(tokens[0])
 
     for source in soup.find_all("source"):
         adicionar(source.get("src"))
-        srcset = source.get("srcset")
+        srcset = source.get("srcset", "")
         if srcset:
             for parte in srcset.split(","):
-                adicionar(parte.strip().split()[0] if parte.strip() else None)
+                tokens = parte.strip().split()
+                if tokens:
+                    adicionar(tokens[0])
 
+    for video in soup.find_all("video"):
+        adicionar(video.get("poster"))
+        adicionar(video.get("data-poster"))
+
+    _ext_img = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp", ".jfif")
     for tag in soup.find_all(["a", "link"]):
-        adicionar(tag.get("href"))
+        href = (tag.get("href") or "").split("?")[0].lower()
+        if href.endswith(_ext_img):
+            adicionar(tag.get("href"))
 
-    # URLs de imagem dentro de JSON, scripts e CSS inline.
-    re_url = re.compile(r'https?://[^\s\'"<>]+', re.IGNORECASE)
+    re_url = re.compile(r'https?://[^\s\'"<>\\]+', re.IGNORECASE)
     for match in re_url.findall(html):
-        if any(ext in match.lower() for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]):
+        path = urlparse(match).path.lower().split("?")[0]
+        if path.endswith(_ext_img):
             adicionar(match)
 
-    excluir = [
-        "favicon",
-        "pixel",
-        "track",
-        "1x1",
-        "blank",
-        "spacer",
-        "ad.gif",
-        "ads.",
-        "doubleclick",
-        "google-analytics",
-        "googletagmanager",
-        ".svg",
-    ]
-    return [u for u in urls if not any(k in u.lower() for k in excluir)]
+    return urls[:max_candidatas]
 
 
 @router.post("/descrever-pagina", summary="Entra em um site e descreve todas as imagens encontradas")
@@ -566,18 +703,12 @@ async def descrever_imagens_pagina(
     db: Session = Depends(get_db),
     usuario: models.Usuario = Depends(obter_usuario_atual),
 ):
-    headers_pagina = {
-        "User-Agent": (
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-    }
-
     url_pagina = _limpar_url(body.url)
+    timeout_pg = httpx.Timeout(connect=10.0, read=20.0, write=10.0, pool=5.0)
     try:
-        async with httpx.AsyncClient(timeout=25, follow_redirects=True, headers=headers_pagina) as client:
+        async with httpx.AsyncClient(
+            timeout=timeout_pg, follow_redirects=True, headers=_headers_pagina()
+        ) as client:
             resp = await client.get(url_pagina)
             resp.raise_for_status()
             html = resp.text
@@ -585,30 +716,39 @@ async def descrever_imagens_pagina(
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Não foi possível acessar o site: {str(e)}")
 
-    urls_candidatas = _extrair_urls_imagem(html, url_base)
+    urls_candidatas = _extrair_urls_imagem(html, url_base, max_candidatas=30)
     if not urls_candidatas:
         raise HTTPException(
             status_code=404,
             detail=(
-                "Nenhuma imagem encontrada nesta página. O site pode carregar imagens via JavaScript. "
+                "Nenhuma imagem encontrada nesta página. O site provavelmente carrega "
+                "imagens via JavaScript e elas não estão no HTML estático. "
                 "Tente copiar a URL direta de uma imagem ou enviar um print."
             ),
         )
 
-    resultados = []
-    erros = []
+    resultados: list[dict] = []
+    erros: list[dict] = []
+    videos_detectados: list[dict] = []
     prompt_final = _prompt_final(usuario, db)
 
     for url_img in urls_candidatas:
         if len(resultados) >= body.limite:
             break
 
+        if _parece_url_video(url_img):
+            videos_detectados.append({
+                "url": url_img,
+                "observacao": "Vídeo detectado; análise de vídeo deve ser feita por frames na aba Ao Vivo.",
+            })
+            continue
+
         try:
-            dados, mime_type, url_final = await baixar_imagem_validada(url_img, referer=url_base)
+            dados, mime_type, url_final = await _baixar_candidato(url_img, referer=url_base)
             data_uri = imagem_para_data_uri(dados, mime_type)
-            descricao = chamar_modelo(data_uri, prompt_final)
+            descricao = await asyncio.to_thread(chamar_modelo, data_uri, prompt_final)
         except Exception as e:
-            erros.append({"url": url_img, "erro": str(e)[:250]})
+            erros.append({"url": url_img, "erro": str(e)[:200]})
             continue
 
         registro = models.Descricao(
@@ -622,24 +762,25 @@ async def descrever_imagens_pagina(
         db.add(registro)
         db.commit()
         db.refresh(registro)
-        resultados.append({"id": registro.id, "url_imagem": url_final, "descricao": descricao})
+        resultados.append({"url": url_final, "descricao": descricao})
 
     if not resultados:
         detalhe = (
-            f"Encontrei {len(urls_candidatas)} URL(s), mas não consegui baixar nenhuma imagem válida. "
-            "O site pode bloquear download automático, retornar HTML no lugar da imagem ou exigir JavaScript. "
-            "Tente abrir a imagem individualmente ou enviar um print."
+            f"Encontrei {len(urls_candidatas)} URL(s) de imagem, mas não consegui baixar nenhuma válida. "
+            "Possíveis causas: o site bloqueia download automático, usa proteção de player, "
+            "exige login/captcha, ou as imagens são carregadas por script. "
+            "Tente enviar uma imagem direta, print da tela ou arquivo."
         )
         if erros:
-            detalhe += " Primeiro erro: " + erros[0]["erro"]
+            detalhe += f" Primeiro erro: {erros[0]['erro']}"
         raise HTTPException(status_code=502, detail=detalhe)
 
     return {
-        "pagina_url": body.url,
-        "total_imagens_encontradas": len(urls_candidatas),
+        "total_encontradas": len(urls_candidatas),
         "total_descritas": len(resultados),
-        "erros": erros[:5],
         "imagens": resultados,
+        "erros": erros[:5],
+        "videos_detectados": videos_detectados[:5],
     }
 
 

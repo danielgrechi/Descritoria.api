@@ -460,40 +460,110 @@ document.getElementById("enviarFeedbackTexto").addEventListener("click", () => {
 document.getElementById("btnDescreverUrl").addEventListener("click", async () => {
   const url = document.getElementById("urlInternet").value.trim();
   if (!url) return setStatus("Informe uma URL.");
-  setStatus("Descrevendo imagem da internet.");
+
+  const btnUrl = document.getElementById("btnDescreverUrl");
+  const btnPagina = document.getElementById("btnDescreverPagina");
+  const resultadoEl = document.getElementById("resultadoInternet");
+
+  btnUrl.disabled = true;
+  btnPagina.disabled = true;
+  resultadoEl.textContent = "";
+  setStatus("Descrevendo imagem da internet...");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90000);
+
   try {
-    const data = await apiFetch("/imagens/descrever-url", {
+    const resp = await fetch(API + "/imagens/descrever-url", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, quantidade: 1 })
+      headers: token
+        ? { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
+        : { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, quantidade: 1 }),
+      signal: controller.signal
     });
-    document.getElementById("resultadoInternet").textContent = data.descricoes?.[0] || "";
+
+    if (!resp.ok) {
+      let detalhe = "";
+      try { const d = await resp.json(); detalhe = d.detail || JSON.stringify(d); }
+      catch { detalhe = await resp.text(); }
+      throw new Error(detalhe || `Erro HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const descricao = data.descricoes?.[0] || data.descricao || "";
+    resultadoEl.textContent = descricao;
     ultimaDescricaoId = data.id;
-    falar(data.descricoes?.[0] || "");
+    falar(descricao);
     setStatus("Imagem da internet descrita.");
   } catch (err) {
-    document.getElementById("resultadoInternet").textContent = err.message;
-    setStatus("Erro na internet: " + err.message);
+    if (err.name === "AbortError") {
+      const msg = "Tempo limite atingido. O site pode estar bloqueando acesso automático, carregando por script, exigindo captcha/login ou demorando demais.";
+      resultadoEl.textContent = msg;
+      setStatus("Tempo limite atingido.");
+    } else {
+      resultadoEl.textContent = err.message;
+      setStatus("Erro: " + err.message);
+    }
+  } finally {
+    clearTimeout(timer);
+    btnUrl.disabled = false;
+    btnPagina.disabled = false;
   }
 });
 
 document.getElementById("btnDescreverPagina").addEventListener("click", async () => {
   const url = document.getElementById("urlInternet").value.trim();
   if (!url) return setStatus("Informe uma URL.");
-  setStatus("Buscando imagens da página.");
+
+  const btnUrl = document.getElementById("btnDescreverUrl");
+  const btnPagina = document.getElementById("btnDescreverPagina");
+  const resultadoEl = document.getElementById("resultadoInternet");
+
+  btnUrl.disabled = true;
+  btnPagina.disabled = true;
+  resultadoEl.textContent = "";
+  setStatus("Buscando imagens da página...");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120000);
+
   try {
-    const data = await apiFetch("/imagens/descrever-pagina", {
+    const resp = await fetch(API + "/imagens/descrever-pagina", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, limite: 5 })
+      headers: token
+        ? { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
+        : { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, limite: 5 }),
+      signal: controller.signal
     });
-    const texto = data.imagens.map((img, i) => `Imagem ${i + 1}:\n${img.descricao}`).join("\n\n");
-    document.getElementById("resultadoInternet").textContent = texto;
-    falar(`Encontrei e descrevi ${data.total_descritas} imagens. ` + texto);
-    setStatus(`Página processada. ${data.total_descritas} imagens descritas.`);
+
+    if (!resp.ok) {
+      let detalhe = "";
+      try { const d = await resp.json(); detalhe = d.detail || JSON.stringify(d); }
+      catch { detalhe = await resp.text(); }
+      throw new Error(detalhe || `Erro HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const totalDescritas = data.total_descritas ?? 0;
+    const texto = (data.imagens || []).map((img, i) => `Imagem ${i + 1}:\n${img.descricao}`).join("\n\n");
+    resultadoEl.textContent = texto || "Nenhuma imagem descrita.";
+    if (texto) falar(`Encontrei e descrevi ${totalDescritas} imagem${totalDescritas !== 1 ? "s" : ""}. ` + texto);
+    setStatus(`Página processada. ${totalDescritas} imagem${totalDescritas !== 1 ? "s" : ""} descrita${totalDescritas !== 1 ? "s" : ""}.`);
   } catch (err) {
-    document.getElementById("resultadoInternet").textContent = err.message;
-    setStatus("Erro ao descrever página: " + err.message);
+    if (err.name === "AbortError") {
+      const msg = "Tempo limite atingido. O site pode estar bloqueando acesso automático, carregando por script, exigindo captcha/login ou demorando demais.";
+      resultadoEl.textContent = msg;
+      setStatus("Tempo limite atingido.");
+    } else {
+      resultadoEl.textContent = err.message;
+      setStatus("Erro ao descrever página: " + err.message);
+    }
+  } finally {
+    clearTimeout(timer);
+    btnUrl.disabled = false;
+    btnPagina.disabled = false;
   }
 });
 
